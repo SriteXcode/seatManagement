@@ -1,0 +1,6 @@
+# Local backend ignores
+node_modules/
+.env
+
+# Do not ignore example files
+!.env.example
