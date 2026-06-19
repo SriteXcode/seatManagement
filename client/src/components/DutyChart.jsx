@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useRef } from "react";
-import html2pdf from "html2pdf.js";
 
 const API = import.meta.env.VITE_API || "http://localhost:4000";
 
@@ -69,7 +68,7 @@ export default function DutyChart({ token }) {
     }
   }
 
-  const downloadPDF = () => {
+  const downloadPDF = async () => {
     const element = chartRef.current;
     const opt = {
       margin: 0.2,
@@ -78,6 +77,7 @@ export default function DutyChart({ token }) {
       html2canvas: { scale: 2 },
       jsPDF: { unit: 'in', format: 'a3', orientation: 'landscape' }
     };
+    const html2pdf = (await import("html2pdf.js")).default;
     html2pdf().set(opt).from(element).save();
   };
 

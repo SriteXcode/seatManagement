@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 
+
+
 const Register = ({ onRegister, onToggle, showToast }) => {
   const [formData, setFormData] = useState({
     username: '',
@@ -51,40 +53,71 @@ const Register = ({ onRegister, onToggle, showToast }) => {
   };
 
   return (
-    <div className="bg-white shadow-xl border border-gray-100 rounded-2xl p-6 max-w-lg mx-auto text-left animate-fadeIn">
-      <h2 className="text-xl font-bold text-gray-800 mb-2">Create Account</h2>
-      <p className="text-xs text-gray-500 mb-5">Fill in the details below to register on the exam allotment portal.</p>
+    <div className="bg-white shadow-xl border border-gray-100 rounded-2xl p-4 sm:p-2 max-w-lg mx-auto text-left animate-fadeIn">
+        <div className="flex items-center justify-around mb-2 rounded-full p-2 bg-gray-50">
+  <h2 className="flex-1 text-center bg-red-600 text-white py-2 rounded-full font-bold text-xl">
+    Register
+  </h2>
+
+  <button
+    onClick={onToggle}
+    className="flex-1 text-center text-xl text-gray-800 font-bold bg-transparent border-none cursor-pointer"
+  >
+    Login
+  </button>
+</div>
+      {/* <p className="text-xs text-gray-500 mb-5">Fill in the details below to register on the exam allotment portal.</p> */}
       
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {/* Role Radio buttons */}
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">Register As</span>
-          <div className="flex gap-4 mt-1">
-            <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 cursor-pointer">
-              <input
-                type="radio"
-                name="role"
-                checked={formData.role === 'admin'}
-                onChange={() => handleRoleChange('admin')}
-                className="text-red-700 focus:ring-red-500 w-4 h-4 cursor-pointer"
-              />
-              Admin
-            </label>
-            <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 cursor-pointer">
-              <input
-                type="radio"
-                name="role"
-                checked={formData.role === 'staff'}
-                onChange={() => handleRoleChange('staff')}
-                className="text-red-700 focus:ring-red-500 w-4 h-4 cursor-pointer"
-              />
-              Staff
-            </label>
-          </div>
-        </div>
+        <div className="relative flex bg-gray-100 rounded-lg p-1 w-full">
+  {/* Sliding Background */}
+  <div
+    className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-md bg-red-500 transition-all duration-700 ease-in-out
+      ${formData.role === 'admin' ? 'left-1' : 'left-1/2'}
+    `}
+  />
+<label className="relative z-10 flex-1 text-center py-2 cursor-pointer">
+    <input
+      type="radio"
+      name="role"
+      checked={formData.role === 'admin'}
+      onChange={() => handleRoleChange('admin')}
+      className="sr-only"
+    />
+    <span className={formData.role === 'admin' ? 'text-white font-semibold text-lg' : 'text-gray-700 font-semibold'}>
+      Admin
+    </span>
+  </label>
+  <label className="relative z-10 flex-1 text-center py-2 cursor-pointer">
+    <input
+      type="radio"
+      name="role"
+      checked={formData.role === 'staff'}
+      onChange={() => handleRoleChange('staff')}
+      className="sr-only"
+    />
+    <span className={formData.role === 'staff' ? 'text-white font-semibold text-lg' : 'text-gray-700 font-semibold'}>
+      Staff
+    </span>
+  </label>
+
+  {/* <label className="relative z-10 flex-1 text-center py-2 cursor-pointer">
+    <input
+      type="radio"
+      name="role"
+      checked={formData.role === 'admin'}
+      onChange={() => handleRoleChange('admin')}
+      className="sr-only"
+    />
+    <span className={formData.role === 'admin' ? 'text-white' : 'text-gray-700'}>
+      Admin
+    </span>
+  </label> */}
+</div>
 
         {/* Basic Credentials */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="flex flex-col">
             <label className="text-[10px] font-bold text-gray-600 uppercase mb-1">Username</label>
             <input
@@ -115,7 +148,7 @@ const Register = ({ onRegister, onToggle, showToast }) => {
           <label className="text-[10px] font-bold text-gray-600 uppercase mb-1">Full Name</label>
           <input
             className="border border-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg px-3 py-2 text-sm text-black"
-            placeholder="John Doe"
+            placeholder="Sriii Jiii"
             name="name"
             value={formData.name}
             onChange={handleChange}
@@ -123,7 +156,7 @@ const Register = ({ onRegister, onToggle, showToast }) => {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="flex flex-col">
             <label className="text-[10px] font-bold text-gray-600 uppercase mb-1">Email Address</label>
             <input
@@ -165,7 +198,7 @@ const Register = ({ onRegister, onToggle, showToast }) => {
 
         {/* Role Conditional Fields */}
         {formData.role === 'admin' && (
-          <div className="flex flex-col p-3.5 bg-red-50/20 border border-red-100 rounded-xl animate-fadeIn">
+          <div className="flex flex-col p-3.5 bg-red-50/20 border border-red-100 rounded-xl animate-[fadeInUp_1.2s_cubic-bezier(0.16,1,0.3,1)_forwards]">
             <label className="text-[10px] font-bold text-red-750 uppercase mb-1">Organization / School / College Name</label>
             <input
               className="border border-gray-250 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg px-3 py-2 text-sm text-black bg-white"
@@ -182,7 +215,7 @@ const Register = ({ onRegister, onToggle, showToast }) => {
         )}
 
         {formData.role === 'staff' && (
-          <div className="flex flex-col p-3.5 bg-yellow-50/20 border border-yellow-100 rounded-xl animate-fadeIn">
+          <div className="flex flex-col p-3.5 bg-yellow-50/20 border border-yellow-100 rounded-xl animate-[fadeInUp_1.2s_cubic-bezier(0.16,1,0.3,1)_forwards]">
             <label className="text-[10px] font-bold text-yellow-800 uppercase mb-1">Admin Unique Code (6-Digits)</label>
             <input
               className="border border-gray-250 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg px-3 py-2 text-sm text-black bg-white font-mono text-center tracking-widest text-lg font-bold"

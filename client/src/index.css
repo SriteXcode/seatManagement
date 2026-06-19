@@ -1,4 +1,32 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&display=swap');
 @import "tailwindcss";
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+  /* Redefined colors to custom indigo palette */
+  --color-red-50: #f5f3ff;
+  --color-red-100: #ede9fe;
+  --color-red-150: #ddd6fe;
+  --color-red-200: #ddd6fe;
+  --color-red-250: #c7d2fe;
+  --color-red-300: #c084fc;
+  --color-red-400: #a78bfa;
+  --color-red-500: #6366f1;
+  --color-red-550: #4f46e5;
+  --color-red-600: #4f46e5;
+  --color-red-650: #4338ca;
+  --color-red-700: #6366f1;
+  --color-red-750: #4f46e5;
+  --color-red-800: #4338ca;
+  --color-red-850: #3730a3;
+  --color-red-900: #312e81;
+  --color-red-950: #1e1b4b;
+
+  --animate-slideIn: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-fadeIn: fadeIn 0.2s ease-out forwards;
+  --animate-scaleIn: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
 
 @keyframes slideIn {
   from {
@@ -41,4 +69,41 @@
 
 .animate-scaleIn {
   animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Dropdown / Select Popup Styling */
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%234f46e5' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
+  background-position: right 0.75rem center;
+  background-repeat: no-repeat;
+  background-size: 1.25em 1.25em;
+  padding-right: 2.25rem !important;
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+  transition: all 0.15s ease-in-out;
+}
+
+select:hover {
+  border-color: #a5b4fc;
+}
+
+select:focus {
+  border-color: #6366f1;
+  outline: 2px solid transparent;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+select option {
+  background-color: #ffffff;
+  color: #1f2937;
+  font-family: var(--font-sans);
+  font-size: 0.825rem;
+  padding: 12px;
 }

@@ -37,7 +37,10 @@ export default function RoomPreview({
   rowGrouping,
   colGrouping,
   gapType,
-  gapAction
+  gapAction,
+  onDragStart,
+  onDropOnSeat,
+  userRole
 }) {
   // const previewRef = useRef(); // previewRef is no longer needed here
 
@@ -45,7 +48,7 @@ export default function RoomPreview({
     const rows = Number(room.rows);
     const cols = Number(room.cols);
     const map = {};
-    allotments.filter(a => String(a.room._id) === String(room._id)).forEach(a => {
+    allotments.filter(a => String(a.room._id || a.room) === String(room._id)).forEach(a => {
       map[`${a.row},${a.col}`] = a;
     });
     return { rows, cols, map };
@@ -160,6 +163,17 @@ export default function RoomPreview({
                 return (
                   <div
                     key={key}
+                    draggable={userRole === "admin"}
+                    onDragStart={e => {
+                      if(onDragStart && a) onDragStart(e, a, room, r, c);
+                      else e.preventDefault();
+                    }}
+                    onDragOver={e => {
+                      if(userRole === "admin" && !isHidden && (!isLayoutGap || gapAction === "bring-together")) e.preventDefault();
+                    }}
+                    onDrop={e => {
+                      if(onDropOnSeat && !isHidden && (!isLayoutGap || gapAction === "bring-together")) onDropOnSeat(e, room, r, c);
+                    }}
                     title={a ? [
                       `Name: ${a.student.name}`,
                       `${getFieldLabel ? getFieldLabel('constraint_1') : 'Dept'}: ${a.student.dept}`,
@@ -170,10 +184,10 @@ export default function RoomPreview({
                       isHidden
                         ? 'border-none bg-transparent opacity-0 text-transparent pointer-events-none'
                         : a 
-                          ? `${getDeptColor(a.student.dept, a.student.sem)} border-gray-400 shadow-sm` 
+                          ? `${getDeptColor(a.student.dept, a.student.sem)} border-gray-400 shadow-sm ${userRole === "admin" ? "cursor-grab active:cursor-grabbing" : ""}` 
                           : isLayoutGap
                             ? 'border-2 border-dashed border-gray-300 bg-gray-100/70 text-gray-500'
-                            : 'border-gray-250 bg-white hover:bg-gray-50/50'
+                            : `border-gray-250 bg-white hover:bg-gray-50/50 ${userRole === "admin" ? "cursor-pointer" : ""}`
                     }`}
                   >
                     {isHidden ? '' : (
