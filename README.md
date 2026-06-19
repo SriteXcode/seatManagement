@@ -6,6 +6,15 @@ Built with high-fidelity aesthetics, PWA capabilities, and advanced code-splitti
 
 ---
 
+## 🌐 Live Deployments
+
+* **Live Link**: [https://seatmanagement-1.onrender.com](https://seatmanagement-1.onrender.com)
+
+*(Note: Keeping both client and backend links documented in the README is highly recommended for verifying server status, configuring CORS headers, and checking service availability).*
+
+---
+
+
 ## 🚀 Key Features
 
 * **Flexible Seating Planner**: Create custom exam hall grids, specify dimensions (rows/columns), and manage capacities.

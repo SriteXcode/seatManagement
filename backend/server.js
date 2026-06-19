@@ -6,6 +6,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 import cookieParser from "cookie-parser";
 import { rateLimit } from "express-rate-limit";
+import mongoose from "mongoose";
 
 import { connectDB } from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
@@ -78,6 +79,16 @@ app.use("/staff", staffRoutes);
 app.use("/library", libraryRoutes);
 app.use("/comments", commentRoutes);
 app.use("/exam-configs", configRoutes);
+
+app.get("/health", (req, res) => {
+  const dbStatus = mongoose.connection.readyState === 1 ? "connected" : "disconnected";
+  res.json({
+    status: "UP",
+    uptime: process.uptime(),
+    database: dbStatus,
+    timestamp: new Date()
+  });
+});
 
 app.get("/", (req, res) => res.json({ ok: true, message: "Exam Seat Management API Modularized" }));
 
