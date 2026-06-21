@@ -209,10 +209,10 @@ export default function FormBuilderTab({ token, decoded, showToast }) {
     }
   };
 
-  // Generate public registration URL using form ID
+  // Generate public registration URL using form ID (query string to work reliably on SPA deployment platforms like Render)
   const orgCode = decoded?.adminCode || "100000";
   const publicURL = activeFormId
-    ? `${window.location.protocol}//${window.location.host}/public/register/${orgCode}/${activeFormId}`
+    ? `${window.location.protocol}//${window.location.host}/?view=register&orgCode=${orgCode}&formId=${activeFormId}`
     : "";
   const qrCodeURL = publicURL 
     ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(publicURL)}`
@@ -306,7 +306,7 @@ export default function FormBuilderTab({ token, decoded, showToast }) {
           {/* Forms Status Dashboard Overview */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {allConfigs.map((config) => {
-              const configURL = `${window.location.protocol}//${window.location.host}/public/register/${orgCode}/${config._id}`;
+              const configURL = `${window.location.protocol}//${window.location.host}/?view=register&orgCode=${orgCode}&formId=${config._id}`;
               const isExpired = config.dueDate && new Date() > new Date(config.dueDate);
               const statusText = config.isActive 
                 ? (isExpired ? "Expired" : "Live") 
