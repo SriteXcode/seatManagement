@@ -211,6 +211,25 @@ export const api = {
       method: "POST",
       body: JSON.stringify(studentData)
     }),
+  submitInquiry: (inquiryData) =>
+    request("/superadmin/public/inquiry", {
+      method: "POST",
+      body: JSON.stringify(inquiryData)
+    }),
+  getSuperadminStats: (token) =>
+    request("/superadmin/stats", {}, token),
+  listOrganisations: (token) =>
+    request("/superadmin/organisations", {}, token),
+  listInquiries: (token) =>
+    request("/superadmin/inquiries", {}, token),
+  toggleResolveInquiry: (id, token) =>
+    request(`/superadmin/inquiries/${encodeURIComponent(id)}/resolve`, {
+      method: "PUT"
+    }, token),
+  deleteInquiry: (id, token) =>
+    request(`/superadmin/inquiries/${encodeURIComponent(id)}`, {
+      method: "DELETE"
+    }, token),
   getFormConfig: (examType, token) => 
     request(`/form-configs/${encodeURIComponent(examType)}`, {}, token),
   saveFormConfig: (examType, configData, token) => 

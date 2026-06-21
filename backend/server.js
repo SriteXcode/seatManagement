@@ -18,6 +18,7 @@ import libraryRoutes from "./routes/libraryRoutes.js";
 import commentRoutes from "./routes/commentRoutes.js";
 import configRoutes from "./routes/configRoutes.js";
 import formRoutes from "./routes/formRoutes.js";
+import superadminRoutes from "./routes/superadminRoutes.js";
 
 dotenv.config();
 
@@ -80,6 +81,7 @@ app.use("/library", libraryRoutes);
 app.use("/comments", commentRoutes);
 app.use("/exam-configs", configRoutes);
 app.use("/form-configs", formRoutes);
+app.use("/superadmin", superadminRoutes);
 app.use("/", allotmentRoutes); // Mounted at root for /generate, /allotments, etc.
 
 

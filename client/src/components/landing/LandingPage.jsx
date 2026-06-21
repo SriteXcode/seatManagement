@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { api } from "../../services/api";
 
 const Register = React.lazy(() => import("../Register"));
 
@@ -18,6 +19,40 @@ export default function LandingPage({
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authDirection, setAuthDirection] = useState("right");
   const [activeModalPage, setActiveModalPage] = useState(null);
+
+  const handleFeedbackSubmit = async (e) => {
+    e.preventDefault();
+    const data = {
+      name: e.target.name?.value || "Feedback User",
+      email: e.target.email.value,
+      type: e.target.type.value,
+      message: e.target.message.value
+    };
+    try {
+      await api.submitInquiry(data);
+      showToast("Feedback submitted successfully. Thank you!", "success");
+      setActiveModalPage(null);
+    } catch (err) {
+      showToast(err.message || "Failed to submit feedback", "error");
+    }
+  };
+
+  const handleContactSubmit = async (e) => {
+    e.preventDefault();
+    const data = {
+      name: e.target.name.value,
+      email: e.target.email.value,
+      type: "Contact Query",
+      message: e.target.message.value
+    };
+    try {
+      await api.submitInquiry(data);
+      showToast("Your inquiry has been received. We will respond shortly.", "success");
+      setActiveModalPage(null);
+    } catch (err) {
+      showToast(err.message || "Failed to submit inquiry", "error");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans overflow-x-hidden">
@@ -294,28 +329,28 @@ export default function LandingPage({
 
             {activeModalPage === "feedback" && (
               <div className="space-y-4 text-left">
-                <h3 className="text-sm font-bold text-gray-800 border-b pb-2">Report & Feedback</h3>
-                <form onSubmit={(e) => {
-                  e.preventDefault();
-                  showToast("Feedback submitted successfully. Thank you!", "success");
-                  setActiveModalPage(null);
-                }} className="space-y-3">
+                <h3 className="text-sm font-bold text-gray-808 border-b pb-2">Report & Feedback</h3>
+                <form onSubmit={handleFeedbackSubmit} className="space-y-3">
                   <div>
                     <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Feedback Type</label>
-                    <select className="w-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg px-3 py-2 text-xs bg-white text-black font-semibold">
-                      <option>Bug Report</option>
-                      <option>Feature Request</option>
-                      <option>General Feedback</option>
-                      <option>Other</option>
+                    <select name="type" className="w-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg px-3 py-2 text-xs bg-white text-black font-semibold">
+                      <option value="Bug Report">Bug Report</option>
+                      <option value="Feature Request">Feature Request</option>
+                      <option value="General Feedback">General Feedback</option>
+                      <option value="Other">Other</option>
                     </select>
                   </div>
                   <div>
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Your Name</label>
+                    <input required name="name" type="text" placeholder="John Doe" className="w-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg px-3 py-2 text-xs bg-white text-black animate-fadeIn" />
+                  </div>
+                  <div>
                     <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Your Email</label>
-                    <input required type="email" placeholder="email@example.com" className="w-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg px-3 py-2 text-xs bg-white text-black" />
+                    <input required name="email" type="email" placeholder="email@example.com" className="w-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg px-3 py-2 text-xs bg-white text-black" />
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Message / Details</label>
-                    <textarea required placeholder="Please describe the bug or feature request in detail..." rows="4" className="w-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg px-3 py-2 text-xs bg-white text-black resize-none"></textarea>
+                    <textarea required name="message" placeholder="Please describe the bug or feature request in detail..." rows="4" className="w-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg px-3 py-2 text-xs bg-white text-black resize-none"></textarea>
                   </div>
                   <button type="submit" className="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-2.5 rounded-xl text-xs transition-colors shadow cursor-pointer">
                     Submit Feedback
@@ -326,8 +361,8 @@ export default function LandingPage({
 
             {activeModalPage === "contact" && (
               <div className="space-y-4 text-left">
-                <h3 className="text-sm font-bold text-gray-800 border-b pb-2">Contact Us</h3>
-                <p className="text-xs text-gray-500 leading-relaxed font-medium">
+                <h3 className="text-sm font-bold text-gray-808 border-b pb-2">Contact Us</h3>
+                <p className="text-xs text-gray-505 leading-relaxed font-semibold">
                   Have questions or need custom deployment support for your institution? Get in touch with our operations team.
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-semibold text-gray-700 bg-gray-50 p-4 border border-gray-150 rounded-xl">
@@ -344,18 +379,18 @@ export default function LandingPage({
                     <div>123 University Ave, Suite 400, NY 10001</div>
                   </div>
                 </div>
-                <form onSubmit={(e) => {
-                  e.preventDefault();
-                  showToast("Your inquiry has been received. We will respond shortly.", "success");
-                  setActiveModalPage(null);
-                }} className="space-y-3">
+                <form onSubmit={handleContactSubmit} className="space-y-3">
                   <div>
                     <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Your Name</label>
-                    <input required type="text" placeholder="Name" className="w-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg px-3 py-2 text-xs bg-white text-black" />
+                    <input required name="name" type="text" placeholder="John Doe" className="w-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg px-3 py-2 text-xs bg-white text-black" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Your Email</label>
+                    <input required name="email" type="email" placeholder="email@example.com" className="w-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg px-3 py-2 text-xs bg-white text-black" />
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Message</label>
-                    <textarea required placeholder="Write your message here..." rows="3" className="w-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg px-3 py-2 text-xs bg-white text-black resize-none"></textarea>
+                    <textarea required name="message" placeholder="Write your message here..." rows="3" className="w-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg px-3 py-2 text-xs bg-white text-black resize-none"></textarea>
                   </div>
                   <button type="submit" className="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-2.5 rounded-xl text-xs transition-colors shadow cursor-pointer">
                     Send Message
@@ -386,11 +421,11 @@ export default function LandingPage({
       {/* 6. Centered Slide-in Auth Overlay Modal */}
       {showAuthModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-xs animate-fadeIn">
-          <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 max-w-lg w-full p-2 animate-scaleIn mx-4 relative max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 max-w-lg w-full p-6 sm:p-8 animate-scaleIn mx-4 relative max-h-[90vh] overflow-y-auto overflow-x-hidden">
             {/* Close Button */}
             <button
               onClick={() => setShowAuthModal(false)}
-              className="absolute z-150 top-[-12px] right-[-2px] rounded-[0px_0px_14px_18px] bg-red-700 text-white hover:text-gray-800 font-bold p-1 cursor-pointer text-2xl"
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 cursor-pointer text-2xl font-bold bg-transparent hover:scale-110 active:scale-95 transition-all z-50"
             >
               &times;
             </button>

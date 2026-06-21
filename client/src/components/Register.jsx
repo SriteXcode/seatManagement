@@ -53,7 +53,7 @@ const Register = ({ onRegister, onToggle, showToast }) => {
   };
 
   return (
-    <div className="bg-white shadow-xl border border-gray-100 rounded-2xl p-4 sm:p-2 max-w-lg mx-auto text-left animate-fadeIn">
+    <div className="w-full text-left">
         <div className="flex items-center justify-around mb-2 rounded-full p-2 bg-gray-50">
   <h2 className="flex-1 text-center bg-red-600 text-white py-2 rounded-full font-bold text-xl">
     Register

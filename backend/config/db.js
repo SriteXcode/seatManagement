@@ -1,6 +1,8 @@
 import mongoose from "mongoose";
 import ExamConfig from "../models/ExamConfig.js";
 import Student from "../models/Student.js";
+import User from "../models/User.js";
+import bcrypt from "bcrypt";
 
 const seedDefaultConfigs = async () => {
   try {
@@ -56,6 +58,32 @@ export const connectDB = async () => {
     console.log("Mongo connected");
     
     await seedDefaultConfigs();
+    
+    // Seed default superadmin if none exists
+    const superadminUsername = process.env.SUPERADMIN_USERNAME || "superadmin";
+    const superadminPassword = process.env.SUPERADMIN_PASSWORD || "superadmin123";
+    const passwordHash = await bcrypt.hash(superadminPassword, 10);
+
+    const superadmin = await User.findOne({ role: "superadmin" });
+    if (!superadmin) {
+      const newSuperadmin = new User({
+        username: superadminUsername,
+        passwordHash,
+        role: "superadmin",
+        name: "Platform Owner",
+        email: "owner@examseatallotment.org",
+        phone: "0000000000",
+        address: "HQ",
+        isApproved: true
+      });
+      await newSuperadmin.save();
+      console.log(`Default superadmin user created: username '${superadminUsername}', password '${superadminPassword}'`);
+    } else {
+      superadmin.username = superadminUsername;
+      superadmin.passwordHash = passwordHash;
+      await superadmin.save();
+      console.log(`Superadmin credentials synchronized: username '${superadminUsername}'`);
+    }
     
     // Legacy migration
     const migrateRes = await Student.updateMany(

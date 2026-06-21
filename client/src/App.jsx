@@ -23,6 +23,7 @@ const DistancingModal = React.lazy(() => import("./components/allotments/Distanc
 const ProfileTab = React.lazy(() => import("./components/profile/ProfileTab"));
 const FormBuilderTab = React.lazy(() => import("./components/students/FormBuilderTab"));
 const PublicRegistration = React.lazy(() => import("./components/students/PublicRegistration"));
+const SuperadminDashboard = React.lazy(() => import("./components/superadmin/SuperadminDashboard"));
 import LandingPage from "./components/landing/LandingPage";
 
 import ToastContainer from "./components/common/ToastContainer";
@@ -251,8 +252,8 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (token) fetchMeta();
-  }, [token, selectedExamType]);
+    if (token && userRole !== "superadmin") fetchMeta();
+  }, [token, selectedExamType, userRole]);
 
   useEffect(() => {
     setDeptSemCombinations([]);
@@ -265,7 +266,7 @@ export default function App() {
   }, [selectedDept, selectedSem]);
 
   useEffect(() => {
-    if (token) {
+    if (token && userRole !== "superadmin") {
       const fetchFilteredSubjects = async () => {
         try {
           const data = await api.getStudentsMeta(selectedExamType, selectedDept, selectedSem, token);
@@ -278,7 +279,7 @@ export default function App() {
       };
       fetchFilteredSubjects();
     }
-  }, [token, selectedExamType, selectedDept, selectedSem]);
+  }, [token, selectedExamType, selectedDept, selectedSem, userRole]);
 
   async function fetchSchedules() {
     try {
@@ -297,13 +298,12 @@ export default function App() {
       console.error(e); 
     }
   }
-
   useEffect(() => { 
-    if (token) {
+    if (token && userRole !== "superadmin") {
       fetchSchedules(); 
       fetchRoomSchedules();
     } 
-  }, [token]);
+  }, [token, userRole]);
 
   useEffect(() => {
     if (activeTab !== "Allotment") {
@@ -568,7 +568,7 @@ export default function App() {
 
   // Keep staging bucket in sync with allStudents and allotments universally
   useEffect(() => {
-    if (!token) return;
+    if (!token || userRole === "superadmin") return;
     const placedStudentIds = new Set((allotments || []).map(a => a.student?._id).filter(Boolean));
     const unplaced = (allStudents || []).filter(
       s => s.examType === selectedExamType && !placedStudentIds.has(s._id)
@@ -589,7 +589,7 @@ export default function App() {
         return s;
       });
     });
-  }, [allStudents, allotments, selectedExamType, token]);
+  }, [allStudents, allotments, selectedExamType, token, userRole]);
 
   async function saveManualAllotments(updatedAllotments) {
     setIsSaving(true);
@@ -735,7 +735,7 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (token) {
+    if (token && userRole !== "superadmin") {
       fetchRooms();
       fetchAllotments();
       fetchInvigAssignments();
@@ -750,7 +750,7 @@ export default function App() {
         fetchPendingStaff();
       }
     }
-  }, [token, shift, date]);
+  }, [token, shift, date, userRole]);
 
   // COMBINATION MANAGEMENT
   const addDeptSemCombination = () => {
@@ -2571,6 +2571,22 @@ export default function App() {
   }
 
   // AUTH STATE RENDERING OVERRIDES
+  if (isLoggedIn && userRole === "superadmin") {
+    return (
+      <React.Suspense fallback={
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="relative w-8 h-8">
+            <div className="absolute inset-0 rounded-full border-3 border-red-100 animate-pulse"></div>
+            <div className="absolute inset-0 rounded-full border-3 border-transparent border-t-red-700 animate-spin"></div>
+          </div>
+        </div>
+      }>
+        <SuperadminDashboard token={token} onLogout={logout} showToast={showToast} />
+        <ToastContainer toasts={toasts} />
+      </React.Suspense>
+    );
+  }
+
   if (!isLoggedIn) {
     return (
       <>
