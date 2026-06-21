@@ -159,8 +159,7 @@ export default function App() {
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    console.log(`User response to install prompt: ${outcome}`);
+    await deferredPrompt.userChoice;
     setDeferredPrompt(null);
     setShowInstallBanner(false);
   };
@@ -679,6 +678,7 @@ export default function App() {
   }
 
   async function doLogin() {
+    setLoading(true);
     try {
       const data = await api.login(loginForm.username, loginForm.password);
       if (data.token) {
@@ -690,10 +690,13 @@ export default function App() {
       }
     } catch (e) {
       showToast("Login error: " + e.message, "error");
+    } finally {
+      setLoading(false);
     }
   }
 
   async function doRegister(formData) {
+    setLoading(true);
     try {
       const result = await api.register(formData);
       if (result.ok) {
@@ -704,6 +707,8 @@ export default function App() {
       }
     } catch (e) {
       showToast("Registration error: " + e.message, "error");
+    } finally {
+      setLoading(false);
     }
   }
 

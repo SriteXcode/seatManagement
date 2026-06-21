@@ -17,6 +17,7 @@ export default function SuperadminDashboard({ token, onLogout, showToast }) {
   const [inquiries, setInquiries] = useState([]);
   const [inquiryFilter, setInquiryFilter] = useState(""); // "" (All), "Bug Report", "Feature Request", "Contact Query"
   const [searchTerm, setSearchTerm] = useState("");
+  const [processingInquiryId, setProcessingInquiryId] = useState(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -43,6 +44,7 @@ export default function SuperadminDashboard({ token, onLogout, showToast }) {
   }, [token]);
 
   const handleToggleResolve = async (id) => {
+    setProcessingInquiryId(id);
     try {
       const updated = await api.toggleResolveInquiry(id, token);
       setInquiries(prev => prev.map(inq => inq._id === id ? { ...inq, isResolved: updated.isResolved } : inq));
@@ -56,11 +58,14 @@ export default function SuperadminDashboard({ token, onLogout, showToast }) {
       showToast(`Inquiry marked as ${updated.isResolved ? 'Resolved' : 'Pending'}!`, "success");
     } catch (err) {
       showToast(err.message || "Failed to update inquiry status", "error");
+    } finally {
+      setProcessingInquiryId(null);
     }
   };
 
   const handleDeleteInquiry = async (id) => {
     if (!window.confirm("Are you sure you want to delete this query?")) return;
+    setProcessingInquiryId(id);
     try {
       await api.deleteInquiry(id, token);
       setInquiries(prev => prev.filter(inq => inq._id !== id));
@@ -76,6 +81,8 @@ export default function SuperadminDashboard({ token, onLogout, showToast }) {
       showToast("Inquiry deleted successfully!", "success");
     } catch (err) {
       showToast(err.message || "Failed to delete inquiry", "error");
+    } finally {
+      setProcessingInquiryId(null);
     }
   };
 
@@ -376,20 +383,34 @@ export default function SuperadminDashboard({ token, onLogout, showToast }) {
 
                             <div className="md:col-span-1 flex items-center justify-end gap-2 shrink-0 select-none">
                               <button
+                                disabled={processingInquiryId === inq._id}
                                 onClick={() => handleToggleResolve(inq._id)}
-                                className={`text-[10px] font-extrabold px-3 py-1.5 border rounded-lg transition-colors cursor-pointer ${
+                                className={`text-[10px] font-extrabold px-3 py-1.5 border rounded-lg transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50 ${
                                   inq.isResolved
                                     ? "bg-white hover:bg-gray-50 text-gray-600 border-gray-300"
                                     : "bg-red-50 hover:bg-red-100 text-red-700 border-red-200"
                                 }`}
                               >
-                                {inq.isResolved ? "Mark Pending" : "Resolve Query"}
+                                {processingInquiryId === inq._id ? (
+                                  <>
+                                    <i className="las la-spinner animate-spin"></i> Processing
+                                  </>
+                                ) : (
+                                  inq.isResolved ? "Mark Pending" : "Resolve Query"
+                                )}
                               </button>
                               <button
+                                disabled={processingInquiryId === inq._id}
                                 onClick={() => handleDeleteInquiry(inq._id)}
-                                className="text-[10px] font-extrabold bg-white hover:bg-red-50 text-red-650 border border-gray-250 hover:border-red-200 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                                className="text-[10px] font-extrabold bg-white hover:bg-red-50 text-red-650 border border-gray-250 hover:border-red-200 px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                               >
-                                Delete
+                                {processingInquiryId === inq._id ? (
+                                  <>
+                                    <i className="las la-spinner animate-spin"></i> Deleting
+                                  </>
+                                ) : (
+                                  "Delete"
+                                )}
                               </button>
                             </div>
                           </div>

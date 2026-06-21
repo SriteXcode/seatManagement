@@ -61,7 +61,7 @@ export const updateRoom = async (req, res) => {
     const room = await Room.findOneAndUpdate(
       { _id: id, orgCode: req.user.adminCode },
       { name, rows, cols },
-      { new: true }
+      { returnDocument: "after" }
     );
     res.json(room);
   } catch (e) {

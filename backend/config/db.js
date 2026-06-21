@@ -42,7 +42,7 @@ const seedDefaultConfigs = async () => {
       await ExamConfig.findOneAndUpdate(
         { examType: conf.examType, orgCode: { $exists: false } },
         { $set: conf },
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: 'after' }
       );
     }
     console.log("Default global exam configs verified");
@@ -77,7 +77,7 @@ export const connectDB = async () => {
         isApproved: true
       });
       await newSuperadmin.save();
-      console.log(`Default superadmin user created: username '${superadminUsername}', password '${superadminPassword}'`);
+      console.log(`Default superadmin user created: username '${superadminUsername}'`);
     } else {
       superadmin.username = superadminUsername;
       superadmin.passwordHash = passwordHash;

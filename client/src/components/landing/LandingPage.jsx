@@ -19,6 +19,7 @@ export default function LandingPage({
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authDirection, setAuthDirection] = useState("right");
   const [activeModalPage, setActiveModalPage] = useState(null);
+  const [submittingInquiry, setSubmittingInquiry] = useState(false);
 
   const handleFeedbackSubmit = async (e) => {
     e.preventDefault();
@@ -28,12 +29,15 @@ export default function LandingPage({
       type: e.target.type.value,
       message: e.target.message.value
     };
+    setSubmittingInquiry(true);
     try {
       await api.submitInquiry(data);
       showToast("Feedback submitted successfully. Thank you!", "success");
       setActiveModalPage(null);
     } catch (err) {
       showToast(err.message || "Failed to submit feedback", "error");
+    } finally {
+      setSubmittingInquiry(false);
     }
   };
 
@@ -45,12 +49,15 @@ export default function LandingPage({
       type: "Contact Query",
       message: e.target.message.value
     };
+    setSubmittingInquiry(true);
     try {
       await api.submitInquiry(data);
       showToast("Your inquiry has been received. We will respond shortly.", "success");
       setActiveModalPage(null);
     } catch (err) {
       showToast(err.message || "Failed to submit inquiry", "error");
+    } finally {
+      setSubmittingInquiry(false);
     }
   };
 
@@ -352,8 +359,14 @@ export default function LandingPage({
                     <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Message / Details</label>
                     <textarea required name="message" placeholder="Please describe the bug or feature request in detail..." rows="4" className="w-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg px-3 py-2 text-xs bg-white text-black resize-none"></textarea>
                   </div>
-                  <button type="submit" className="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-2.5 rounded-xl text-xs transition-colors shadow cursor-pointer">
-                    Submit Feedback
+                  <button disabled={submittingInquiry} type="submit" className="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50">
+                    {submittingInquiry ? (
+                      <>
+                        <i className="las la-spinner animate-spin"></i> Submitting...
+                      </>
+                    ) : (
+                      "Submit Feedback"
+                    )}
                   </button>
                 </form>
               </div>
@@ -392,8 +405,14 @@ export default function LandingPage({
                     <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Message</label>
                     <textarea required name="message" placeholder="Write your message here..." rows="3" className="w-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg px-3 py-2 text-xs bg-white text-black resize-none"></textarea>
                   </div>
-                  <button type="submit" className="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-2.5 rounded-xl text-xs transition-colors shadow cursor-pointer">
-                    Send Message
+                  <button disabled={submittingInquiry} type="submit" className="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50">
+                    {submittingInquiry ? (
+                      <>
+                        <i className="las la-spinner animate-spin"></i> Sending...
+                      </>
+                    ) : (
+                      "Send Message"
+                    )}
                   </button>
                 </form>
               </div>

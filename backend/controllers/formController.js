@@ -100,7 +100,7 @@ export const saveFormConfig = async (req, res) => {
     const config = await FormConfig.findOneAndUpdate(
       { orgCode, examType },
       { orgCode, examType, title, description, isActive, fields, dueDate },
-      { new: true, upsert: true }
+      { returnDocument: "after", upsert: true }
     ).lean();
 
     res.json(config);
@@ -265,7 +265,7 @@ export const saveFormConfigById = async (req, res) => {
       config = await FormConfig.findOneAndUpdate(
         { _id, orgCode },
         { examType, title, description, isActive, fields, dueDate },
-        { new: true }
+        { returnDocument: "after" }
       ).lean();
     } else {
       config = new FormConfig({

@@ -52,7 +52,7 @@ export const saveConfig = async (req, res) => {
     const config = await ExamConfig.findOneAndUpdate(
       { examType, orgCode: req.user.adminCode },
       { examType, fields, orgCode: req.user.adminCode },
-      { new: true, upsert: true }
+      { returnDocument: "after", upsert: true }
     );
     res.json(config);
   } catch (e) {
