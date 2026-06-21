@@ -333,6 +333,36 @@ export default function App() {
     }
   }
 
+  async function editInvigilator(id, invigilatorData) {
+    try {
+      const data = await api.updateInvigilator(id, invigilatorData, token);
+      if (data._id) {
+        showToast("Invigilator updated successfully.", "success");
+        fetchInvigilators();
+        fetchAllotments();
+      } else {
+        showToast(data.error || "Error updating invigilator", "error");
+      }
+    } catch (e) {
+      showToast(e.message, "error");
+    }
+  }
+
+  async function deleteInvigilator(id, name) {
+    try {
+      const result = await api.deleteInvigilator(id, token);
+      if (result.ok) {
+        showToast(`Invigilator "${name}" deleted successfully.`, "success");
+        fetchInvigilators();
+        fetchAllotments();
+      } else {
+        showToast("Error deleting invigilator", "error");
+      }
+    } catch (e) {
+      showToast(e.message, "error");
+    }
+  }
+
   async function assignInvigilators(invigilatorsPerRoom, distributorsCount, targetSchedules) {
     if (targetSchedules.length === 0) {
       showToast("No schedules provided for assignment.", "error");
@@ -349,7 +379,7 @@ export default function App() {
         setLoading(true);
         for (const sched of targetSchedules) {
           try {
-            const roomsToAssign = rooms.filter(r => sched.roomIds.includes(r._id));
+            const roomsToAssign = rooms.filter(r => sched.roomIds.map(String).includes(String(r._id)));
             if (roomsToAssign.length === 0) {
               errors.push(`${sched.date} (Shift ${sched.shift}): No rooms selected.`);
               continue;
@@ -361,7 +391,7 @@ export default function App() {
             let invigilatorIndex = 0;
 
             for (const room of roomsToAssign) {
-              const studentCount = currentAllotments.filter(a => String(a.room._id || a.room) === String(room._id)).length;
+              const studentCount = currentAllotments.filter(a => String(a.room?._id || a.room || '') === String(room._id)).length;
               let targetCount = 0;
               if (studentCount > 0) {
                 targetCount = (studentCount < 20) ? 1 : invigilatorsPerRoom;
@@ -467,6 +497,20 @@ export default function App() {
     }
   }
 
+  async function updateLibraryItem(id, updatedData) {
+    try {
+      const result = await api.updateLibraryItem(id, updatedData, token);
+      if (result.ok) {
+        showToast("Schedule updated in library.", "success");
+        fetchLibrary();
+      } else {
+        showToast(result.error || "Failed to update library schedule.", "error");
+      }
+    } catch (e) {
+      showToast("Error updating: " + e.message, "error");
+    }
+  }
+
   async function fetchPendingStaff() {
     try {
       const data = await api.getPendingStaff(token);
@@ -531,11 +575,45 @@ export default function App() {
   }
 
   async function fetchAllotments() {
+    if (!token || userRole === "superadmin") return;
     try {
       const data = await api.getAllotments(shift, date, token);
       if (Array.isArray(data)) {
-        setAllotments(data);
-        fetchStagingBucket(data);
+        const placed = data.filter(a => a.room);
+        const staged = data.filter(a => !a.room);
+
+        setAllotments(placed);
+
+        const stagedStudents = staged.map(a => {
+          if (!a.student) return null;
+          const student = a.student;
+          return {
+            ...student,
+            previousSeat: student.metadata && student.metadata.previousRoomName ? {
+              roomName: student.metadata.previousRoomName,
+              seatLabel: student.metadata.previousSeatLabel,
+              date: student.metadata.previousDate,
+              shift: student.metadata.previousShift
+            } : null
+          };
+        }).filter(Boolean);
+        setBucket(stagedStudents);
+
+        const comboMap = {};
+        data.forEach(a => {
+          if (a.student) {
+            const key = `${a.student.dept || ""}_${a.student.sem || ""}_${a.subject || ""}`;
+            comboMap[key] = {
+              dept: a.student.dept || "",
+              sem: String(a.student.sem || ""),
+              subject: a.subject || ""
+            };
+          }
+        });
+        const extractedCombos = Object.values(comboMap);
+        if (extractedCombos.length > 0) {
+          setDeptSemCombinations(extractedCombos);
+        }
         
         if (data.length > 0) {
           const first = data[0];
@@ -550,12 +628,14 @@ export default function App() {
         }
       } else {
         setBucket([]);
+        setAllotments([]);
         setIsLayoutSettingsLocked(false);
       }
       fetchRoomSchedules();
     } catch (e) {
       console.error(e);
       setBucket([]);
+      setAllotments([]);
     }
   }
 
@@ -568,6 +648,8 @@ export default function App() {
   // Keep staging bucket in sync with allStudents and allotments universally
   useEffect(() => {
     if (!token || userRole === "superadmin") return;
+    if (isLayoutSettingsLocked) return;
+
     const placedStudentIds = new Set((allotments || []).map(a => a.student?._id).filter(Boolean));
     const unplaced = (allStudents || []).filter(
       s => s.examType === selectedExamType && !placedStudentIds.has(s._id)
@@ -588,15 +670,46 @@ export default function App() {
         return s;
       });
     });
-  }, [allStudents, allotments, selectedExamType, token, userRole]);
+  }, [allStudents, allotments, selectedExamType, token, userRole, isLayoutSettingsLocked]);
 
-  async function saveManualAllotments(updatedAllotments) {
+  async function saveManualAllotments(updatedAllotments, currentBucket = bucket) {
     setIsSaving(true);
     try {
+      const allotmentsToSave = [
+        ...updatedAllotments.map(a => ({
+          student: a.student?._id || a.student,
+          room: a.room?._id || a.room,
+          row: a.row,
+          col: a.col,
+          seatCode: a.seatCode,
+          subject: a.subject,
+          seatLabel: a.seatLabel,
+          useDistancing: a.useDistancing,
+          rowGrouping: a.rowGrouping,
+          colGrouping: a.colGrouping,
+          gapType: a.gapType,
+          gapAction: a.gapAction
+        })),
+        ...currentBucket.map(s => ({
+          student: s._id || s,
+          room: null,
+          row: null,
+          col: null,
+          seatCode: "",
+          subject: (Array.isArray(s.subject) ? s.subject[0] : s.subject) || "",
+          seatLabel: "Staging Bucket",
+          useDistancing: false,
+          rowGrouping: 0,
+          colGrouping: 0,
+          gapType: "",
+          gapAction: ""
+        }))
+      ];
+
       const data = await api.saveManualAllotments({
         shift,
         date,
-        allotments: updatedAllotments,
+        allotments: allotmentsToSave,
         useDistancing,
         rowGrouping,
         colGrouping,
@@ -613,6 +726,12 @@ export default function App() {
       setIsSaving(false);
     }
   }
+
+  const handleClearBucket = () => {
+    setBucket([]);
+    saveManualAllotments(allotments, []);
+    showToast("Staging bucket cleared.", "success");
+  };
 
   async function handleSearchStudent() {
     if (!searchRoll.trim()) return;
@@ -810,6 +929,7 @@ export default function App() {
       }
 
       let updatedAllotments = [...allotments];
+      let nextBucket = [...bucket];
 
       if (source === "seat") {
         if (String(sourceRoomId) === String(targetRoom._id) && sourceRow === targetRow && sourceCol === targetCol) {
@@ -897,7 +1017,8 @@ export default function App() {
             metadata: updatedMetadata
           };
           updatedAllotments[targetIndex] = updatedTarget;
-          setBucket(prev => [...prev.filter(s => s._id !== studentId), updatedTargetStudent]);
+          nextBucket = [...bucket.filter(s => s._id !== studentId), updatedTargetStudent];
+          setBucket(nextBucket);
           showToast(`Placed ${student.roll} and moved ${targetStudent.roll} to bucket`, "success");
 
           api.updateStudent(targetStudent._id, {
@@ -926,13 +1047,14 @@ export default function App() {
           };
 
           updatedAllotments.push(newAllotment);
-          setBucket(prev => prev.filter(s => s._id !== studentId));
+          nextBucket = bucket.filter(s => s._id !== studentId);
+          setBucket(nextBucket);
           showToast(`Allotted ${student.roll} to ${targetRoom.name} Seat ${targetSeatCode}`, "success");
         }
       }
 
       setAllotments(updatedAllotments);
-      saveManualAllotments(updatedAllotments);
+      saveManualAllotments(updatedAllotments, nextBucket);
     } catch (err) {
       console.error(err);
       showToast("Error processing move: " + err.message, "error");
@@ -1749,7 +1871,7 @@ export default function App() {
   const importParsedData = async () => {
     if (!parsedCsvText.trim()) return showToast("No parsed data found.", "error");
     
-    const uploadedRolls = getRollsFromRawCsv(parsedCsvText);
+    const uploadedRolls = await getRollsFromRawCsv(parsedCsvText);
     const existingRolls = allStudents
       .filter(s => s.examType === selectedExamType)
       .map(s => (s.roll || "").toString().trim())
@@ -2084,8 +2206,7 @@ export default function App() {
       return;
     }
     
-    const countRes = await fetch(`${api.getDownloadCSVUrl(shift, date)}`, { method: "HEAD", headers: { ...authHeader(token) } });
-    const hasPrevious = countRes.ok;
+    const hasPrevious = allotments.length > 0;
 
     const action = async (includeBucket = true) => {
       setLoading(true);
@@ -2101,7 +2222,7 @@ export default function App() {
           colGrouping,
           gapType,
           gapAction,
-          includeBucket,
+          excludeStudentIds: includeBucket ? [] : bucket.map(s => s._id),
           examType: selectedExamType
         }, token);
 
@@ -2171,6 +2292,54 @@ export default function App() {
       }
     } catch (e) {
       showToast("Regeneration failed: " + e.message, "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function deleteActiveSchedule() {
+    setLoading(true);
+    try {
+      const res = await api.deleteSchedule(Number(shift), date, token);
+      if (res.ok) {
+        showToast("Schedule deleted successfully.", "success");
+        setAllotments([]);
+        setBucket([]);
+        setDeptSemCombinations([]);
+        setIsLayoutSettingsLocked(false);
+        fetchSchedules();
+      } else {
+        showToast(res.error || "Failed to delete schedule.", "error");
+      }
+    } catch (e) {
+      showToast("Error deleting schedule: " + e.message, "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function updateActiveSchedule(updatedData) {
+    setLoading(true);
+    try {
+      const payload = {
+        currentShift: Number(shift),
+        currentDate: date,
+        ...updatedData
+      };
+      const res = await api.updateSchedule(payload, token);
+      if (res.ok) {
+        showToast("Schedule updated successfully.", "success");
+        setDate(updatedData.date);
+        setShift(Number(updatedData.shift));
+        if (updatedData.time) setTime(updatedData.time);
+        if (updatedData.subject) setSubject(updatedData.subject);
+        fetchSchedules();
+        fetchAllotments();
+      } else {
+        showToast(res.error || "Failed to update schedule.", "error");
+      }
+    } catch (e) {
+      showToast("Error updating schedule: " + e.message, "error");
     } finally {
       setLoading(false);
     }
@@ -2271,11 +2440,11 @@ export default function App() {
 
   async function downloadRoomPDF(room) {
     const element = document.createElement('div');
-    const invigilatorName = invigAssignments.find(a => a.room._id === room._id)?.invigilator.name || "Not Assigned";
+    const invigilatorName = invigAssignments.find(a => a.room?._id === room._id)?.invigilator.name || "Not Assigned";
     
     const map = gridForRoom(room);
     const counts = getStudentCounts(room, allotments);
-    const roomAllotments = allotments.filter(a => String(a.room._id) === String(room._id));
+    const roomAllotments = allotments.filter(a => String(a.room?._id || a.room || '') === String(room._id));
     const roomSubject = roomAllotments[0]?.subject || "";
     
     let gridHtml = '';
@@ -2825,6 +2994,8 @@ export default function App() {
             token={token}
             invigilators={invigilators}
             onAdd={addInvigilator}
+            onEdit={editInvigilator}
+            onDelete={deleteInvigilator}
             onAssign={assignInvigilators}
             onRefresh={fetchInvigilators}
             triggerConfirm={triggerConfirm}
@@ -2902,6 +3073,7 @@ export default function App() {
             setFilters={setFilters}
             rooms={rooms}
             allotments={allotments}
+            allStudents={allStudents}
             invigAssignments={invigAssignments}
             gridForRoom={gridForRoom}
             getFieldLabel={getFieldLabel}
@@ -2919,6 +3091,8 @@ export default function App() {
             selectedStudentForMove={selectedStudentForMove}
             handleTapStudent={handleTapStudent}
             handleTapEmptySeat={handleTapEmptySeat}
+            deleteSchedule={deleteActiveSchedule}
+            updateSchedule={updateActiveSchedule}
           />
         </div>
 
@@ -2938,6 +3112,8 @@ export default function App() {
             setSelectedExamType={setSelectedExamType}
             setActiveTab={setActiveTab}
             deleteFromLibrary={deleteFromLibrary}
+            updateLibraryItem={updateLibraryItem}
+            setDeptSemCombinations={setDeptSemCombinations}
             showToast={showToast}
           />
         </div>
@@ -2981,6 +3157,7 @@ export default function App() {
           handleTapStudent={handleTapStudent}
           handleTapBucket={handleTapBucket}
           handleAssignClick={handleAssignClick}
+          handleClearBucket={handleClearBucket}
         />
 
         {/* Spacing Layout Settings Dialog */}

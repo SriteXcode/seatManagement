@@ -26,7 +26,7 @@ const getAvatarBg = (name) => {
   return colors[hash % colors.length];
 };
 
-const Invigilators = ({ token, invigilators, onAdd, onAssign, onRefresh, triggerConfirm, showToast, userRole = 'admin' }) => {
+const Invigilators = ({ token, invigilators, onAdd, onEdit, onDelete, onAssign, onRefresh, triggerConfirm, showToast, userRole = 'admin' }) => {
   const [newInvigilator, setNewInvigilator] = useState({
     name: '',
     empId: '',
@@ -34,6 +34,9 @@ const Invigilators = ({ token, invigilators, onAdd, onAssign, onRefresh, trigger
     phone: '',
     email: '',
   });
+  const [editingInvigilatorId, setEditingInvigilatorId] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [showAllInvigilators, setShowAllInvigilators] = useState(false);
   const [invigilatorsPerRoom, setInvigilatorsPerRoom] = useState(1);
   const [distributors, setDistributors] = useState(2);
   
@@ -118,10 +121,15 @@ const Invigilators = ({ token, invigilators, onAdd, onAssign, onRefresh, trigger
     }
   };
 
-  const handleAddInvigilator = (e) => {
+  const handleSubmitForm = (e) => {
     e.preventDefault();
     if (newInvigilator.name.trim() && newInvigilator.empId.trim()) {
-      onAdd(newInvigilator);
+      if (editingInvigilatorId) {
+        onEdit(editingInvigilatorId, newInvigilator);
+        setEditingInvigilatorId(null);
+      } else {
+        onAdd(newInvigilator);
+      }
       setNewInvigilator({ name: '', empId: '', dept: '', phone: '', email: '' });
     } else {
       if (showToast) {
@@ -130,6 +138,30 @@ const Invigilators = ({ token, invigilators, onAdd, onAssign, onRefresh, trigger
         alert('Name and Employee ID are required.');
       }
     }
+  };
+
+  const startEdit = (inv) => {
+    setEditingInvigilatorId(inv._id);
+    setNewInvigilator({
+      name: inv.name || '',
+      empId: inv.empId || '',
+      dept: inv.dept || '',
+      phone: inv.phone || '',
+      email: inv.email || '',
+    });
+    setShowForm(true);
+    setTimeout(() => {
+      const formElement = document.getElementById("invigilator-form-card");
+      if (formElement) {
+        formElement.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 100);
+  };
+
+  const cancelEdit = () => {
+    setEditingInvigilatorId(null);
+    setNewInvigilator({ name: '', empId: '', dept: '', phone: '', email: '' });
+    setShowForm(false);
   };
 
   const handleAssign = () => {
@@ -213,8 +245,8 @@ const Invigilators = ({ token, invigilators, onAdd, onAssign, onRefresh, trigger
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
         
-        {/* Left Section (2 columns): Assignment & Staff List */}
-        <div className="xl:col-span-2 space-y-6">
+        {/* Left Section (2 columns if form visible, 3 columns if form hidden) */}
+        <div className={`${showForm ? 'xl:col-span-2' : 'xl:col-span-3'} space-y-6`}>
           
           {/* Assignment Selection Area */}
           {userRole === "admin" && (
@@ -327,65 +359,140 @@ const Invigilators = ({ token, invigilators, onAdd, onAssign, onRefresh, trigger
                 <h3 className="text-xs font-extrabold text-gray-855 uppercase tracking-wider">Staff Directory ({filteredInvigilators.length})</h3>
                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">List of all registered invigilators</p>
               </div>
-              <div className="relative w-full md:w-64">
-                <input
-                  type="text"
-                  placeholder="Search name, ID or dept..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/15 focus:border-red-500 rounded-xl px-3 py-1.5 pl-8 text-xs bg-white text-gray-800 font-bold shadow-3xs transition-all"
-                />
-                <i className="las la-search absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+              <div className="flex flex-wrap items-center gap-3">
+                {userRole === "admin" && (
+                  <button
+                    onClick={() => {
+                      setShowForm(true);
+                      setTimeout(() => {
+                        const formElement = document.getElementById("invigilator-form-card");
+                        if (formElement) {
+                          formElement.scrollIntoView({ behavior: "smooth", block: "center" });
+                        }
+                      }, 100);
+                    }}
+                    className="bg-red-700 hover:bg-red-800 text-white font-bold py-1.5 px-3 rounded-lg text-xs transition-colors shadow cursor-pointer flex items-center gap-1"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Invigilator
+                  </button>
+                )}
+                <div className="relative w-full md:w-48">
+                  <input
+                    type="text"
+                    placeholder="Search name, ID or dept..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/15 focus:border-red-500 rounded-xl px-3 py-1.5 pl-8 text-xs bg-white text-gray-800 font-bold shadow-3xs transition-all"
+                  />
+                  <i className="las la-search absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                </div>
               </div>
             </div>
 
             {filteredInvigilators.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {filteredInvigilators.map((invigilator) => (
-                  <div 
-                    key={invigilator._id} 
-                    className="flex items-center gap-3.5 p-3.5 bg-white border border-gray-150 rounded-2xl shadow-3xs hover:shadow-xs transition-all animate-fadeIn"
-                  >
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-extrabold text-xs shadow-3xs ${getAvatarBg(invigilator.name)}`}>
-                      {getInitials(invigilator.name)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="font-extrabold text-xs text-gray-850 truncate">{invigilator.name}</div>
-                      <div className="text-[9px] text-gray-400 font-bold uppercase mt-0.5 flex items-center gap-1.5">
-                        <span>ID: {invigilator.empId}</span>
-                        {invigilator.dept && (
-                          <>
-                            <span className="text-gray-300 font-extrabold">•</span>
-                            <span className="text-red-750 font-extrabold">{invigilator.dept}</span>
-                          </>
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {(showAllInvigilators ? filteredInvigilators : filteredInvigilators.slice(0, 4)).map((invigilator) => (
+                    <div 
+                      key={invigilator._id} 
+                      className="flex items-center gap-3.5 p-3.5 bg-white border border-gray-150 rounded-2xl shadow-3xs hover:shadow-xs transition-all animate-fadeIn"
+                    >
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-extrabold text-xs shadow-3xs ${getAvatarBg(invigilator.name)}`}>
+                        {getInitials(invigilator.name)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-extrabold text-xs text-gray-855 truncate">{invigilator.name}</div>
+                        <div className="text-[9px] text-gray-400 font-bold uppercase mt-0.5 flex items-center gap-1.5">
+                          <span>ID: {invigilator.empId}</span>
+                          {invigilator.dept && (
+                            <>
+                              <span className="text-gray-300 font-extrabold">•</span>
+                              <span className="text-red-750 font-extrabold">{invigilator.dept}</span>
+                            </>
+                          )}
+                        </div>
+                        {(invigilator.phone || invigilator.email) && (
+                          <div className="flex flex-col gap-2.5 mt-2">
+                            {invigilator.phone && (
+                              <a 
+                                href={`tel:${invigilator.phone}`} 
+                                className="text-[9px] text-gray-550 hover:text-red-700 font-bold flex items-center gap-1 transition-colors"
+                                title={`Call ${invigilator.name}`}
+                              >
+                                <i className="las la-phone text-xs"></i> {invigilator.phone}
+                              </a>
+                            )}
+                            {invigilator.email && (
+                              <a 
+                                href={`mailto:${invigilator.email}`} 
+                                className="text-[9px] text-gray-550 hover:text-red-700 font-bold flex items-center gap-1 transition-colors truncate max-w-[130px]"
+                                title={`Email ${invigilator.name}`}
+                              >
+                                <i className="las la-envelope text-xs"></i> {invigilator.email}
+                              </a>
+                            )}
+                          </div>
                         )}
                       </div>
-                      {(invigilator.phone || invigilator.email) && (
-                        <div className="flex gap-2.5 mt-2">
-                          {invigilator.phone && (
-                            <a 
-                              href={`tel:${invigilator.phone}`} 
-                              className="text-[9px] text-gray-550 hover:text-red-700 font-bold flex items-center gap-1 transition-colors"
-                              title={`Call ${invigilator.name}`}
-                            >
-                              <i className="las la-phone text-xs"></i> {invigilator.phone}
-                            </a>
-                          )}
-                          {invigilator.email && (
-                            <a 
-                              href={`mailto:${invigilator.email}`} 
-                              className="text-[9px] text-gray-550 hover:text-red-700 font-bold flex items-center gap-1 transition-colors truncate max-w-[130px]"
-                              title={`Email ${invigilator.name}`}
-                            >
-                              <i className="las la-envelope text-xs"></i> {invigilator.email}
-                            </a>
-                          )}
+                      {userRole === 'admin' && (
+                        <div className="flex gap-1 shrink-0 ml-2">
+                          <button
+                            onClick={() => startEdit(invigilator)}
+                            className="p-1.5 text-amber-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg border border-gray-150 cursor-pointer transition-colors"
+                            title="Edit staff details"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => {
+                              triggerConfirm(
+                                "Delete Invigilator",
+                                `Are you sure you want to delete "${invigilator.name}"? This deletes all their exam assignments.`,
+                                () => onDelete(invigilator._id, invigilator.name)
+                              );
+                            }}
+                            className="p-1.5 text-red-650 hover:text-red-700 hover:bg-red-50 rounded-lg border border-gray-150 cursor-pointer transition-colors"
+                            title="Delete staff member"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
                         </div>
                       )}
                     </div>
+                  ))}
+                </div>
+                {filteredInvigilators.length > 4 && (
+                  <div className="flex justify-center mt-5 pt-3 border-t border-gray-100">
+                    <button
+                      onClick={() => setShowAllInvigilators(!showAllInvigilators)}
+                      className="text-xs border border-gray-250 bg-white hover:bg-gray-50 text-gray-700 font-extrabold px-4 py-2 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 shadow-3xs"
+                    >
+                      {showAllInvigilators ? (
+                        <>
+                          <svg className="w-3.5 h-3.5 text-gray-500 transition-transform rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                          See Less
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                          See More ({filteredInvigilators.length - 4} more)
+                        </>
+                      )}
+                    </button>
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             ) : (
               <div className="text-center py-12 bg-gray-50/30 border border-dashed border-gray-250 rounded-2xl">
                 <div className="w-12 h-12 bg-gray-100 text-gray-400 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -399,12 +506,29 @@ const Invigilators = ({ token, invigilators, onAdd, onAssign, onRefresh, trigger
         </div>
 
         {/* Right Section (1 column): Form Card (Sticky) */}
-        {userRole === "admin" && (
+        {showForm && userRole === "admin" && (
           <div className="lg:sticky lg:top-4 space-y-4">
-            <form onSubmit={handleAddInvigilator} className="bg-white border border-gray-150 rounded-2xl p-5 shadow-3xs animate-fadeIn space-y-4">
+            <form onSubmit={handleSubmitForm} id="invigilator-form-card" className="bg-white border border-gray-150 rounded-2xl p-5 shadow-3xs animate-fadeIn space-y-4 relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowForm(false);
+                  cancelEdit();
+                }}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-605 p-1 border border-gray-150 rounded-lg hover:bg-gray-55 cursor-pointer"
+                title="Close form"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
               <div>
-                <h3 className="text-xs font-extrabold text-gray-855 uppercase tracking-wider">Add New Invigilator</h3>
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">Enter credentials for a new staff member</p>
+                <h3 className="text-xs font-extrabold text-gray-855 uppercase tracking-wider">
+                  {editingInvigilatorId ? 'Edit Invigilator' : 'Add New Invigilator'}
+                </h3>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">
+                  {editingInvigilatorId ? 'Modify credentials for this staff member' : 'Enter credentials for a new staff member'}
+                </p>
               </div>
               <div className="space-y-3">
                 <div className="flex flex-col gap-1">
@@ -465,12 +589,34 @@ const Invigilators = ({ token, invigilators, onAdd, onAssign, onRefresh, trigger
                   />
                 </div>
               </div>
-              <button
-                type="submit"
-                className="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-2.5 px-4 rounded-xl shadow-md transition-all cursor-pointer text-xs"
-              >
-                <i className="las la-plus-circle text-sm mr-1"></i> Add Invigilator
-              </button>
+              <div className="flex flex-col gap-2">
+                <button
+                  type="submit"
+                  className="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-2.5 px-4 rounded-xl shadow-md transition-all cursor-pointer text-xs flex items-center justify-center gap-1.5"
+                >
+                  {editingInvigilatorId ? (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Save Changes
+                    </>
+                  ) : (
+                    <>
+                      <i className="las la-plus-circle text-sm mr-1"></i> Add Invigilator
+                    </>
+                  )}
+                </button>
+                {editingInvigilatorId && (
+                  <button
+                    type="button"
+                    onClick={cancelEdit}
+                    className="w-full bg-white hover:bg-gray-50 border border-gray-250 text-gray-700 font-bold py-2 px-4 rounded-xl shadow-3xs transition-all cursor-pointer text-xs"
+                  >
+                    Cancel Edit
+                  </button>
+                )}
+              </div>
             </form>
           </div>
         )}

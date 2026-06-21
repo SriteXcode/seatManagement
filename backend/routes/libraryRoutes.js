@@ -8,6 +8,7 @@ router.use(authMiddleware);
 
 router.get("/", libraryController.getLibrary);
 router.post("/", libraryController.addToLibrary);
+router.put("/:id", libraryController.updateLibraryItem);
 router.delete("/:id", libraryController.deleteLibraryItem);
 
 export default router;

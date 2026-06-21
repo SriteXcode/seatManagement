@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 
 const allotSchema = new mongoose.Schema({
   student: { type: mongoose.Schema.Types.ObjectId, ref: "Student", required: true },
-  room: { type: mongoose.Schema.Types.ObjectId, ref: "Room", required: true },
+  room: { type: mongoose.Schema.Types.ObjectId, ref: "Room" },
   row: Number,
   col: Number,
   seatCode: String, // A1, B3 etc

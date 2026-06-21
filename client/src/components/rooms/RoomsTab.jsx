@@ -37,6 +37,20 @@ export default function RoomsTab({
   handleDragStartSeat,
   handleDropOnSeat,
 }) {
+  const [downloadingRooms, setDownloadingRooms] = React.useState({});
+
+  React.useEffect(() => {
+    if (movieRoomPreview) {
+      const timer = setTimeout(() => {
+        const previewElement = document.getElementById("active-room-preview");
+        if (previewElement) {
+          previewElement.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [movieRoomPreview]);
+
   return (
     <div id="Rooms" className="space-y-6">
       {/* Rooms Listing */}
@@ -95,10 +109,30 @@ export default function RoomsTab({
                           {isActivePreview ? 'Close Preview' : 'Preview'}
                         </button>
                         <button
-                          onClick={() => downloadRoomPDF(r)}
-                          className="text-xs border border-gray-250 bg-white hover:bg-gray-50 text-gray-700 rounded-lg px-2.5 py-1 transition-colors text-center font-semibold cursor-pointer"
+                          onClick={async () => {
+                            setDownloadingRooms(prev => ({ ...prev, [r._id]: true }));
+                            try {
+                              await downloadRoomPDF(r);
+                            } catch (err) {
+                              console.error("Failed to download room PDF:", err);
+                            } finally {
+                              setDownloadingRooms(prev => ({ ...prev, [r._id]: false }));
+                            }
+                          }}
+                          disabled={downloadingRooms[r._id]}
+                          className="text-xs border border-gray-250 bg-white disabled:bg-gray-150 hover:bg-gray-50 text-gray-700 disabled:text-gray-400 rounded-lg px-2.5 py-1 transition-colors text-center font-semibold cursor-pointer flex items-center justify-center gap-1.5 min-w-[94px]"
                         >
-                          Download PDF
+                          {downloadingRooms[r._id] ? (
+                            <>
+                              <svg className="animate-spin h-3.5 w-3.5 text-gray-500" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                              </svg>
+                              Loading...
+                            </>
+                          ) : (
+                            'Download PDF'
+                          )}
                         </button>
                       </div>
                     </div>
@@ -163,7 +197,7 @@ export default function RoomsTab({
 
       {/* Active Room Preview Visualizer */}
       {movieRoomPreview && (
-        <div className="w-full animate-fadeIn">
+        <div id="active-room-preview" className="w-full animate-fadeIn">
           <RoomPreview
             room={movieRoomPreview}
             allotments={allotments}

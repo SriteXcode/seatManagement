@@ -69,7 +69,27 @@ export default function AllotmentTab({
   selectedStudentForMove,
   handleTapStudent,
   handleTapEmptySeat,
+  deleteSchedule,
+  updateSchedule,
+  allStudents = [],
 }) {
+  const getStudentCountForCombo = (combo) => {
+    if (!Array.isArray(allStudents)) return 0;
+    const isSubjectCompulsory = selectedExamType === "College" || selectedExamType === "School";
+    return allStudents.filter(s => {
+      if (s.examType !== selectedExamType) return false;
+      if (s.dept !== combo.dept) return false;
+      if (String(s.sem) !== String(combo.sem)) return false;
+      if (isSubjectCompulsory && combo.subject) {
+        const studentSubjects = Array.isArray(s.subject) ? s.subject : (s.subject ? [s.subject] : []);
+        if (studentSubjects.length > 0 && !studentSubjects.includes(combo.subject)) {
+          return false;
+        }
+      }
+      return true;
+    }).length;
+  };
+
   const getInitials = (name) => {
     if (!name) return "?";
     const parts = name.trim().split(/\s+/);
@@ -82,6 +102,56 @@ export default function AllotmentTab({
   const decoded = decodeToken(token);
   const isLoggedIn = Boolean(token);
   const [showComments, setShowComments] = React.useState(false);
+  const [isEditingSchedule, setIsEditingSchedule] = React.useState(false);
+  const [editDate, setEditDate] = React.useState("");
+  const [editShift, setEditShift] = React.useState(1);
+  const [editTime, setEditTime] = React.useState("");
+  const [editSubject, setEditSubject] = React.useState("");
+  const [editCombinations, setEditCombinations] = React.useState([]);
+
+  const handleStartEditSchedule = () => {
+    setEditDate(date);
+    setEditShift(shift);
+    setEditTime(time || "");
+    setEditSubject(activeSavedSchedule?.subject || "");
+    setEditCombinations(activeSavedSchedule?.combinations ? JSON.parse(JSON.stringify(activeSavedSchedule.combinations)) : []);
+    setIsEditingSchedule(true);
+  };
+
+  const handleAddCombination = () => {
+    setEditCombinations([...editCombinations, { dept: "", sem: "", subject: "" }]);
+  };
+
+  const handleRemoveCombination = (index) => {
+    setEditCombinations(editCombinations.filter((_, idx) => idx !== index));
+  };
+
+  const handleCombinationChange = (index, field, value) => {
+    const updated = editCombinations.map((c, idx) => {
+      if (idx === index) {
+        return { ...c, [field]: value };
+      }
+      return c;
+    });
+    setEditCombinations(updated);
+  };
+
+  const handleSaveEditedSchedule = async (e) => {
+    e.preventDefault();
+    if (!editDate || !editShift) {
+      if (showToast) showToast("Date and Shift are required.", "error");
+      return;
+    }
+    const filteredCombinations = editCombinations.filter(c => c.dept.trim() || c.sem.trim() || c.subject.trim());
+    await updateSchedule({
+      date: editDate,
+      shift: Number(editShift),
+      time: editTime,
+      subject: editSubject,
+      combinations: filteredCombinations
+    });
+    setIsEditingSchedule(false);
+  };
   const [hoveredSeat, setHoveredSeat] = React.useState(null);
   const [windowSize, setWindowSize] = React.useState({ width: 1200, height: 800 });
 
@@ -267,6 +337,7 @@ export default function AllotmentTab({
                         <span>
                           {getFieldLabel('constraint_1')}: {combo.dept} — {getFieldLabel('constraint_2')}: {combo.sem}
                           {combo.subject && ` — Subject: ${combo.subject}`}
+                          <span className="ml-1.5 font-bold text-gray-500">({getStudentCountForCombo(combo)} students)</span>
                         </span>
                         {userRole === "admin" && (
                           <button
@@ -523,6 +594,31 @@ export default function AllotmentTab({
                       </button>
                     )}
                   </div>
+
+                  {userRole === "admin" && (
+                    <div className="flex gap-2 flex-1 sm:flex-none">
+                      <button
+                        type="button"
+                        onClick={handleStartEditSchedule}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center justify-center gap-1.5 hover:scale-[1.02] active:scale-98"
+                      >
+                        <i className="las la-edit text-sm"></i>
+                        Edit Schedule
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm("Are you sure you want to delete this saved schedule? All allotments and invigilator assignments for this slot will be permanently removed. This will also clean up students who only belong to this schedule.")) {
+                            deleteSchedule();
+                          }
+                        }}
+                        className="flex-1 bg-red-650 hover:bg-red-750 text-white px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center justify-center gap-1.5 hover:scale-[1.02] active:scale-98"
+                      >
+                        <i className="las la-trash text-sm"></i>
+                        Delete Schedule
+                      </button>
+                    </div>
+                  )}
                 </div>
 
               </div>
@@ -629,7 +725,7 @@ export default function AllotmentTab({
                 Saving changes...
               </div>
             )}
-            {isLoggedIn && (
+            {/* {isLoggedIn && (
               <button
                 onClick={() => setShowBucketSidebar(prev => !prev)}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg border border-red-200 text-xs font-semibold transition-all cursor-pointer shadow-xs animate-fadeIn"
@@ -641,7 +737,7 @@ export default function AllotmentTab({
                 />
                 {showBucketSidebar ? 'Hide Staging Bucket' : `Show Staging Bucket (${bucket.length})`}
               </button>
-            )}
+            )} */}
           </div>
         </div>
         <div className="mt-3 space-y-2 select-none">
@@ -908,6 +1004,151 @@ export default function AllotmentTab({
               </div>
             </div>
           )}
+        </div>
+      )}
+      {/* Edit saved schedule modal from allotment tab */}
+      {isEditingSchedule && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto animate-fadeIn select-none">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-150 max-w-2xl w-full flex flex-col text-left">
+            <div className="p-6 border-b border-gray-150 flex justify-between items-center bg-gray-50/50 rounded-t-2xl">
+              <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                <i className="las la-edit text-red-700 text-xl"></i>
+                Edit Saved Schedule
+              </h3>
+              <button 
+                onClick={() => setIsEditingSchedule(false)}
+                className="text-gray-400 hover:text-gray-650 cursor-pointer"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditedSchedule} className="p-6 space-y-4 max-h-[85vh] overflow-y-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1">Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-650 font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1">Shift *</label>
+                  <select
+                    value={editShift}
+                    onChange={(e) => setEditShift(Number(e.target.value))}
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-600 font-medium"
+                  >
+                    <option value={1}>Shift 1</option>
+                    <option value={2}>Shift 2</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1">Time</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 10:00-13:00"
+                    value={editTime}
+                    onChange={(e) => setEditTime(e.target.value)}
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-650 font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1">Subject</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Computer Science Theory"
+                    value={editSubject}
+                    onChange={(e) => setEditSubject(e.target.value)}
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-650 font-medium"
+                  />
+                </div>
+              </div>
+
+              <div className="border-t border-gray-150 pt-4 mt-4">
+                <div className="flex justify-between items-center mb-3">
+                  <h4 className="text-sm font-bold text-gray-700">Combinations</h4>
+                  <button
+                    type="button"
+                    onClick={handleAddCombination}
+                    className="bg-red-50 hover:bg-red-100 text-red-700 font-bold py-1 px-3 rounded-lg text-xs transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Combination
+                  </button>
+                </div>
+
+                {editCombinations.length === 0 ? (
+                  <p className="text-xs text-gray-550 italic py-2">No combinations added yet.</p>
+                ) : (
+                  <div className="space-y-3 max-h-[30vh] overflow-y-auto pr-1">
+                    {editCombinations.map((comb, index) => (
+                      <div key={index} className="flex gap-2 items-center bg-gray-50/50 p-2.5 rounded-xl border border-gray-200 animate-fadeIn">
+                        <div className="flex-1 grid grid-cols-3 gap-2">
+                          <input
+                            type="text"
+                            required
+                            placeholder="Dept (e.g. CSE)"
+                            value={comb.dept}
+                            onChange={(e) => handleCombinationChange(index, "dept", e.target.value)}
+                            className="border border-gray-300 rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-red-500 font-semibold"
+                          />
+                          <input
+                            type="text"
+                            required
+                            placeholder="Sem (e.g. 5)"
+                            value={comb.sem}
+                            onChange={(e) => handleCombinationChange(index, "sem", e.target.value)}
+                            className="border border-gray-300 rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-red-500 font-semibold"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Subject (Optional)"
+                            value={comb.subject}
+                            onChange={(e) => handleCombinationChange(index, "subject", e.target.value)}
+                            className="border border-gray-300 rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-red-500 font-semibold"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveCombination(index)}
+                          className="text-red-650 hover:text-red-800 p-1.5 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                          title="Remove combination"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-2 justify-end border-t border-gray-150 pt-4 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setIsEditingSchedule(false)}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-xl text-xs transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-4 rounded-xl text-xs transition-all cursor-pointer shadow-sm"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

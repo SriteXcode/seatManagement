@@ -76,6 +76,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }, token),
+  deleteSchedule: (shift, date, token) =>
+    request(`/schedules?shift=${shift}&date=${date}`, {
+      method: "DELETE",
+    }, token),
+  updateSchedule: (payload, token) =>
+    request("/schedules", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }, token),
 
   // Rooms
   getRooms: (token) => request("/rooms", {}, token),
@@ -146,6 +155,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify(invigilatorData),
     }, token),
+  updateInvigilator: (id, invigilatorData, token) =>
+    request(`/staff/invigilators/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(invigilatorData),
+    }, token),
+  deleteInvigilator: (id, token) =>
+    request(`/staff/invigilators/${id}`, {
+      method: "DELETE",
+    }, token),
   assignStaff: (payload, token) =>
     request("/staff/assign", {
       method: "POST",
@@ -175,6 +193,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify(libraryData),
     }, token),
+  updateLibraryItem: (id, libraryData, token) =>
+    request(`/library/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(libraryData),
+    }, token),
   deleteFromLibrary: (id, token) =>
     request(`/library/${id}`, {
       method: "DELETE",
@@ -185,7 +208,7 @@ export const api = {
   saveExamConfigs: (configs, token) =>
     request("/exam-configs", {
       method: "POST",
-      body: JSON.stringify({ configs }),
+      body: JSON.stringify(configs),
     }, token),
   deleteExamConfig: (id, token) =>
     request(`/exam-configs/${id}`, {

@@ -10,6 +10,10 @@ router.get("/export/csv", authMiddleware, allotmentController.exportCSV);
 router.get("/export/pdf", authMiddleware, allotmentController.exportPDF);
 router.get("/export/room-grid", authMiddleware, allotmentController.exportRoomGrid);
 router.post("/generate", authMiddleware, adminOnly, allotmentController.generate);
+router.post("/schedules", authMiddleware, adminOnly, allotmentController.generate);
+router.post("/schedules/regenerate", authMiddleware, adminOnly, allotmentController.regenerate);
+router.delete("/schedules", authMiddleware, adminOnly, allotmentController.deleteSchedule);
+router.put("/schedules", authMiddleware, adminOnly, allotmentController.updateSchedule);
 router.post("/allotments/save-manual", authMiddleware, adminOnly, allotmentController.saveManual);
 
 export default router;

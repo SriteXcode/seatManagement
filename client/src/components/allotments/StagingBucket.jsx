@@ -28,6 +28,7 @@ export default function StagingBucket({
   handleTapStudent,
   handleTapBucket,
   handleAssignClick,
+  handleClearBucket,
 }) {
   if (!isLoggedIn) return null;
 
@@ -78,13 +79,28 @@ export default function StagingBucket({
               <p className="text-[10px] text-gray-500 font-semibold">{bucket.length} students stored</p>
             </div>
           </div>
-          <button 
-            onClick={() => setShowBucketSidebar(false)}
-            aria-label="Close Staging Bucket"
-            className="text-gray-400 hover:text-red-700 hover:bg-red-55 p-1.5 rounded-lg transition-colors cursor-pointer flex items-center justify-center"
-          >
-            <i className="las la-times text-lg"></i>
-          </button>
+          <div className="flex items-center gap-2">
+            {bucket.length > 0 && userRole === "admin" && (
+              <button
+                onClick={() => {
+                  if (window.confirm("Are you sure you want to clear all students from the staging bucket? This will delete all unallotted student records for this slot.")) {
+                    handleClearBucket();
+                  }
+                }}
+                className="bg-red-50 hover:bg-red-100 text-red-650 font-bold px-2.5 py-1.5 rounded-lg text-[10px] transition-all cursor-pointer flex items-center justify-center border border-red-200"
+                title="Clear Staging Bucket"
+              >
+                Clear Bucket
+              </button>
+            )}
+            <button 
+              onClick={() => setShowBucketSidebar(false)}
+              aria-label="Close Staging Bucket"
+              className="text-gray-400 hover:text-red-700 hover:bg-red-55 p-1.5 rounded-lg transition-colors cursor-pointer flex items-center justify-center"
+            >
+              <i className="las la-times text-lg"></i>
+            </button>
+          </div>
         </div>
 
         {/* Search & Add within Sidebar */}

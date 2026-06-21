@@ -63,6 +63,18 @@ export default function StudentsTab({
     return filteredStudents.slice(start, start + itemsPerPage);
   }, [filteredStudents, studentPage]);
 
+  React.useEffect(() => {
+    if (selectedFile) {
+      const timer = setTimeout(() => {
+        const previewElement = document.getElementById("uploaded-data-preview");
+        if (previewElement) {
+          previewElement.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedFile]);
+
   const preview = getPreviewRows();
 
   return (
@@ -147,7 +159,7 @@ export default function StudentsTab({
 
             {/* Parsed File Preview Section */}
             {selectedFile && (
-              <div className="mb-6 border border-gray-200 rounded-2xl p-5 bg-white animate-fadeIn">
+              <div id="uploaded-data-preview" className="mb-6 border border-gray-200 rounded-2xl p-5 bg-white animate-fadeIn">
                 <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-3.5">
                   <div className="flex items-center gap-2.5">
                     <div className="p-2 bg-green-50 text-green-700 rounded-xl">

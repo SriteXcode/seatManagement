@@ -9,6 +9,8 @@ router.use(authMiddleware);
 // Invigilator management
 router.get("/invigilators", staffController.getInvigilators);
 router.post("/invigilators", adminOnly, staffController.addInvigilator);
+router.put("/invigilators/:id", adminOnly, staffController.updateInvigilator);
+router.delete("/invigilators/:id", adminOnly, staffController.deleteInvigilator);
 
 // Assignments
 router.get("/assignments", staffController.getAssignments);
