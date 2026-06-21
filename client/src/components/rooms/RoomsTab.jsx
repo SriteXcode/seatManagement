@@ -1,5 +1,6 @@
 import React from "react";
 import RoomPreview from "../RoomPreview";
+import CustomSelect from "../common/CustomSelect";
 
 export default function RoomsTab({
   userRole,
@@ -160,120 +161,103 @@ export default function RoomsTab({
         </div>
       </section>
 
-      {/* Right panel: Active Room Preview Visualizer */}
+      {/* Active Room Preview Visualizer */}
       {movieRoomPreview && (
         <div className="w-full animate-fadeIn">
-          <section className="bg-white shadow rounded-lg p-6 relative">
-            {/* Close Button in header */}
-            <button
-              onClick={() => setMovieRoomPreview(null)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 p-1.5 border border-gray-150 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
-              title="Close Preview"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-            <div className="flex flex-wrap items-center justify-between gap-4 mb-5 pb-4 border-b border-gray-150 select-none pr-8">
-              <div>
-                <h4 className="font-bold text-gray-800 text-sm">Previewing Room: {movieRoomPreview.name}</h4>
-                <p className="text-[10px] text-gray-500 mt-0.5">Select a schedule slot or adjust date/shift directly to preview active arrangements.</p>
-              </div>
-              <div className="flex flex-wrap items-end gap-3">
-                <div className="flex flex-col">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Quick Select Slot</label>
-                  <select
-                    value={`${date}_${shift}`}
-                    onChange={(e) => {
-                      if (!e.target.value) return;
-                      const [newDate, newShift] = e.target.value.split("_");
-                      const s = schedules.find(sched => sched.date === newDate && Number(sched.shift) === Number(newShift));
-                      if (s) {
-                        setDate(s.date);
-                        setShift(Number(s.shift));
-                        if (s.time) setTime(s.time);
-                        if (s.subject) setSubject(s.subject);
-                        if (s.examType) {
-                          setSelectedExamType(s.examType);
-                          localStorage.setItem("selectedExamType", s.examType);
-                        }
+          <RoomPreview
+            room={movieRoomPreview}
+            allotments={allotments}
+            invigilatorName={(() => {
+              const teacher = invigAssignments.find(a => a.room._id === movieRoomPreview._id)?.invigilator;
+              if (!teacher) return "Not Assigned";
+              const firstName = teacher.name.trim().split(/\s+/)[0];
+              return `${firstName} Sir`;
+            })()}
+            shift={shift}
+            date={date}
+            getStudentCounts={getStudentCounts}
+            getFieldLabel={getFieldLabel}
+            useDistancing={useDistancing}
+            rowGrouping={rowGrouping}
+            colGrouping={colGrouping}
+            gapType={gapType}
+            gapAction={gapAction}
+            onDragStart={handleDragStartSeat}
+            onDropOnSeat={handleDropOnSeat}
+            userRole={userRole}
+            selectedExamType={selectedExamType}
+            onClose={() => setMovieRoomPreview(null)}
+            slotSelect={
+              <div className="flex flex-col select-none">
+                <label className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wider mb-1">Quick Select Slot</label>
+                <CustomSelect
+                  value={`${date}_${shift}`}
+                  onChange={(val) => {
+                    if (!val) return;
+                    const [newDate, newShift] = val.split("_");
+                    const s = schedules.find(sched => sched.date === newDate && Number(sched.shift) === Number(newShift));
+                    if (s) {
+                      setDate(s.date);
+                      setShift(Number(s.shift));
+                      if (s.time) setTime(s.time);
+                      if (s.subject) setSubject(s.subject);
+                      if (s.examType) {
+                        setSelectedExamType(s.examType);
+                        localStorage.setItem("selectedExamType", s.examType);
                       }
-                    }}
-                    className="border border-gray-250 rounded-lg px-2.5 py-1 text-xs bg-white text-black font-semibold focus:outline-none focus:ring-2 focus:ring-red-500 shadow-sm transition-all cursor-pointer w-44"
-                  >
-                    <option value="">Select a slot...</option>
-                    {(() => {
-                      const roomAllocated = roomSchedules[movieRoomPreview._id] || [];
-                      const allocatedKeys = new Set(roomAllocated.map(sch => `${sch.date}_${sch.shift}`));
-                      
-                      const otherSchedules = schedules.filter(s => !allocatedKeys.has(`${s.date}_${s.shift}`));
+                    }
+                  }}
+                  placeholder="Select a slot..."
+                  className="w-48"
+                  options={(() => {
+                    const roomAllocated = roomSchedules[movieRoomPreview._id] || [];
+                    const allocatedKeys = new Set(roomAllocated.map(sch => `${sch.date}_${sch.shift}`));
+                    const otherSchedules = schedules.filter(s => !allocatedKeys.has(`${s.date}_${s.shift}`));
 
-                      return (
-                        <>
-                          {roomAllocated.length > 0 && (
-                            <optgroup label="Allocated in this Room">
-                              {roomAllocated.map((sch, idx) => (
-                                <option key={`alloc-${idx}`} value={`${sch.date}_${sch.shift}`}>
-                                  {sch.date} — Shift {sch.shift} ({sch.subjects.join(', ') || 'No subject'})
-                                </option>
-                              ))}
-                            </optgroup>
-                          )}
-                          {otherSchedules.length > 0 && (
-                            <optgroup label="Other Saved Slots">
-                              {otherSchedules.map((sch, idx) => (
-                                <option key={`other-${idx}`} value={`${sch.date}_${sch.shift}`}>
-                                  {sch.date} — Shift {sch.shift} ({sch.subject || 'No subject'})
-                                </option>
-                              ))}
-                            </optgroup>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </select>
-                </div>
-                <div className="flex flex-col">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Date</label>
+                    return [
+                      ...roomAllocated.map(sch => ({
+                        value: `${sch.date}_${sch.shift}`,
+                        label: `🟢 ${sch.date} — S${sch.shift} (${sch.subjects.join(', ') || 'No subject'})`
+                      })),
+                      ...otherSchedules.map(sch => ({
+                        value: `${sch.date}_${sch.shift}`,
+                        label: `📅 ${sch.date} — S${sch.shift} (${sch.subject || 'No subject'})`
+                      }))
+                    ];
+                  })()}
+                />
+              </div>
+            }
+            dateInput={
+              <div className="flex flex-col select-none">
+                <label className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wider mb-1">Date</label>
+                <div className="relative">
                   <input
                     type="date"
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    className="border border-gray-250 rounded-lg px-2.5 py-1 text-xs bg-white text-black font-semibold focus:outline-none focus:ring-2 focus:ring-red-500 shadow-sm w-32"
+                    className="border border-gray-200 rounded-xl px-3 py-1.5 pr-8 text-xs bg-white text-gray-800 font-bold focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/10 shadow-3xs transition-all cursor-pointer w-32"
                   />
-                </div>
-                <div className="flex flex-col">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Shift</label>
-                  <select
-                    value={shift}
-                    onChange={(e) => setShift(Number(e.target.value))}
-                    className="border border-gray-250 rounded-lg px-2.5 py-1 text-xs bg-white text-black font-semibold focus:outline-none focus:ring-2 focus:ring-red-500 shadow-sm cursor-pointer w-20"
-                  >
-                    <option value={1}>1</option>
-                    <option value={2}>2</option>
-                  </select>
+                  <i className="las la-calendar absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"></i>
                 </div>
               </div>
-            </div>
-            
-            <RoomPreview
-              room={movieRoomPreview}
-              allotments={allotments}
-              invigilatorName={invigAssignments.find(a => a.room._id === movieRoomPreview._id)?.invigilator.name || "Not Assigned"}
-              shift={shift}
-              date={date}
-              getStudentCounts={getStudentCounts}
-              getFieldLabel={getFieldLabel}
-              useDistancing={useDistancing}
-              rowGrouping={rowGrouping}
-              colGrouping={colGrouping}
-              gapType={gapType}
-              gapAction={gapAction}
-              onDragStart={handleDragStartSeat}
-              onDropOnSeat={handleDropOnSeat}
-              userRole={userRole}
-            />
-          </section>
+            }
+            shiftInput={
+              <div className="flex flex-col select-none">
+                <label className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wider mb-1">Shift</label>
+                <CustomSelect
+                  value={shift}
+                  onChange={(val) => setShift(Number(val))}
+                  placeholder="Shift"
+                  className="w-24"
+                  options={[
+                    { value: 1, label: "Shift 1" },
+                    { value: 2, label: "Shift 2" }
+                  ]}
+                />
+              </div>
+            }
+          />
         </div>
       )}
     </div>

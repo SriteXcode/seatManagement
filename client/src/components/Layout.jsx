@@ -5,7 +5,10 @@ export default function Layout({
   logout, 
   activeTab: propActiveTab, 
   setActiveTab: propSetActiveTab,
-  onViewLanding
+  onViewLanding,
+  showBucketSidebar,
+  setShowBucketSidebar,
+  bucketLength
 }) {
   const [localActiveTab, setLocalActiveTab] = useState("Students");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -67,15 +70,35 @@ export default function Layout({
   return (
     <div className="flex flex-col md:flex-row-reverse min-h-screen">
       {/* Mobile Header Bar */}
-      <header className="md:hidden bg-red-700 text-white flex items-center justify-between px-4 h-16 shadow-md shrink-0 select-none">
+      <header className="md:hidden bg-red-700 text-white flex items-center justify-between px-4 h-16 shadow-md shrink-0 select-none sticky top-0 z-50">
         <h1 className="text-base font-extrabold">Exam Seat Allotment</h1>
-        <button 
-          onClick={() => setIsSidebarOpen(true)} 
-          className="p-2 text-white focus:outline-none cursor-pointer flex items-center justify-center"
-          title="Open Menu"
-        >
-          <i className="las la-bars text-2xl"></i>
-        </button>
+        <div className="flex items-center gap-1.5 ml-auto">
+          {activeTab === "Allotment" && setShowBucketSidebar && (
+            <button
+              onClick={() => setShowBucketSidebar(prev => !prev)}
+              className="p-2 text-white hover:text-red-200 focus:outline-none cursor-pointer flex items-center justify-center relative"
+              title={showBucketSidebar ? "Hide Staging Bucket" : "Show Staging Bucket"}
+            >
+              <img 
+                src="https://img.icons8.com/?size=50&id=Anr2RtO0yx8e&format=png&color=FFFFFF" 
+                alt="Staging Bucket" 
+                className="w-6 h-6 object-contain" 
+              />
+              {bucketLength > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-black text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full ring-1 ring-red-700">
+                  {bucketLength}
+                </span>
+              )}
+            </button>
+          )}
+          <button 
+            onClick={() => setIsSidebarOpen(true)} 
+            className="p-2 text-white focus:outline-none cursor-pointer flex items-center justify-center"
+            title="Open Menu"
+          >
+            <i className="las la-bars text-2xl"></i>
+          </button>
+        </div>
       </header>
 
       {/* Desktop Sidebar (aside) */}
@@ -83,21 +106,25 @@ export default function Layout({
         <div className="p-6">
           <h1 className="text-xl font-extrabold text-white">Exam Seat Allotment</h1>
         </div>
-        <nav className="flex flex-col justify-between h-[calc(100vh-88px)]">
+        <nav className="flex flex-col h-[calc(100vh-88px)]">
           <ul className="flex-1 overflow-y-auto">
+            {onViewLanding && (
+              <li>
+                <a
+                  href="#"
+                  className="p-4 font-semibold text-sm flex items-center gap-2.5 transition-colors hover:bg-red-800 text-red-100"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onViewLanding();
+                  }}
+                >
+                  <i className="las la-home text-lg shrink-0"></i>
+                  <span>Home</span>
+                </a>
+              </li>
+            )}
             {navLinks}
           </ul>
-          <div className="border-t border-red-800 p-4 space-y-2 shrink-0">
-            {onViewLanding && (
-              <button
-                onClick={() => onViewLanding()}
-                className="w-full text-left p-3.5 font-semibold text-sm text-red-100 hover:bg-red-800 rounded-lg flex items-center gap-2.5 transition-colors cursor-pointer"
-              >
-                <i className="las la-home text-lg shrink-0"></i>
-                View Landing Page
-              </button>
-            )}
-          </div>
         </nav>
       </aside>
 
@@ -118,24 +145,26 @@ export default function Layout({
                 <i className="las la-times text-xl"></i>
               </button>
             </div>
-            <nav className="flex-1 mt-2 flex flex-col justify-between overflow-hidden">
+            <nav className="flex-1 mt-2 flex flex-col overflow-hidden">
               <ul className="flex-1 overflow-y-auto">
+                {onViewLanding && (
+                  <li>
+                    <a
+                      href="#"
+                      className="p-4 font-semibold text-sm flex items-center gap-2.5 transition-colors hover:bg-red-800 text-red-100"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        onViewLanding();
+                        setIsSidebarOpen(false);
+                      }}
+                    >
+                      <i className="las la-home text-lg shrink-0"></i>
+                      <span>Home</span>
+                    </a>
+                  </li>
+                )}
                 {navLinks}
               </ul>
-              <div className="border-t border-red-800 p-4 space-y-2 shrink-0">
-                {onViewLanding && (
-                  <button
-                    onClick={() => {
-                      onViewLanding();
-                      setIsSidebarOpen(false);
-                    }}
-                    className="w-full text-left p-3.5 font-semibold text-sm text-red-100 hover:bg-red-800 rounded-lg flex items-center gap-2.5 transition-colors cursor-pointer"
-                  >
-                    <i className="las la-home text-lg shrink-0"></i>
-                    View Landing Page
-                  </button>
-                )}
-              </div>
             </nav>
           </aside>
         </div>

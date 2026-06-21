@@ -559,48 +559,35 @@ export default function App() {
   }
 
   async function fetchStagingBucket(currentAllotments) {
-    const combos = [];
-    const keys = new Set();
-    if (currentAllotments && currentAllotments.length > 0) {
-      currentAllotments.forEach(a => {
-        if (a.student) {
-          const key = `${a.student.dept}-${a.student.sem}`;
-          if (!keys.has(key)) {
-            keys.add(key);
-            combos.push({ dept: a.student.dept, sem: String(a.student.sem) });
-          }
-        }
-      });
-    } else if (deptSemCombinations && deptSemCombinations.length > 0) {
-      deptSemCombinations.forEach(c => {
-        const key = `${c.dept}-${c.sem}`;
-        if (!keys.has(key)) {
-          keys.add(key);
-          combos.push({ dept: c.dept, sem: String(c.sem) });
-        }
-      });
-    }
-
-    const placedStudentIds = new Set((currentAllotments || []).map(a => a.student?._id).filter(Boolean));
-    if (combos.length === 0) {
-      setBucket(prev => prev.filter(s => !placedStudentIds.has(s._id)));
-      return;
-    }
-
-    try {
-      const students = await api.queryStudents(combos, selectedExamType, token);
-      if (Array.isArray(students)) {
-        setBucket(prev => {
-          const keptFromBucket = prev.filter(s => !placedStudentIds.has(s._id));
-          const keptIds = new Set(keptFromBucket.map(s => s._id));
-          const newUnplaced = students.filter(s => !placedStudentIds.has(s._id) && !keptIds.has(s._id));
-          return [...keptFromBucket, ...newUnplaced];
-        });
-      }
-    } catch (e) {
-      console.error("Error fetching staging bucket students:", e);
+    if (!allStudents || allStudents.length === 0) {
+      fetchAllStudents();
     }
   }
+
+  // Keep staging bucket in sync with allStudents and allotments universally
+  useEffect(() => {
+    if (!token) return;
+    const placedStudentIds = new Set((allotments || []).map(a => a.student?._id).filter(Boolean));
+    const unplaced = (allStudents || []).filter(
+      s => s.examType === selectedExamType && !placedStudentIds.has(s._id)
+    );
+
+    setBucket(prev => {
+      const previousSeatMap = new Map();
+      prev.forEach(s => {
+        if (s.previousSeat) {
+          previousSeatMap.set(s._id, s.previousSeat);
+        }
+      });
+
+      return unplaced.map(s => {
+        if (previousSeatMap.has(s._id)) {
+          return { ...s, previousSeat: previousSeatMap.get(s._id) };
+        }
+        return s;
+      });
+    });
+  }, [allStudents, allotments, selectedExamType, token]);
 
   async function saveManualAllotments(updatedAllotments) {
     setIsSaving(true);
@@ -645,9 +632,38 @@ export default function App() {
       if (existingAllotment) {
         const updatedAllotments = allotments.filter(a => a.student && a.student._id !== student._id);
         setAllotments(updatedAllotments);
-        setBucket(prev => [...prev, student]);
+        const updatedMetadata = {
+          ...student.metadata,
+          previousRoomName: existingAllotment.room.name,
+          previousSeatLabel: existingAllotment.seatCode || getSeatLabel(existingAllotment.row - 1, existingAllotment.col),
+          previousDate: existingAllotment.date || date,
+          previousShift: String(existingAllotment.shift || shift)
+        };
+        const updatedStudent = {
+          ...student,
+          previousSeat: {
+            roomName: existingAllotment.room.name,
+            seatLabel: existingAllotment.seatCode || getSeatLabel(existingAllotment.row - 1, existingAllotment.col),
+            date: existingAllotment.date || date,
+            shift: existingAllotment.shift || shift
+          },
+          metadata: updatedMetadata
+        };
+        setBucket(prev => [...prev, updatedStudent]);
         showToast(`Student ${student.roll} moved from ${existingAllotment.room.name || 'seat'} to bucket.`, "info");
         saveManualAllotments(updatedAllotments);
+
+        api.updateStudent(student._id, {
+          roll: student.roll,
+          name: student.name,
+          dept: student.dept,
+          sem: student.sem,
+          subject: student.subject,
+          examType: student.examType,
+          metadata: updatedMetadata
+        }, token).then(() => {
+          setAllStudents(prev => prev.map(s => s._id === student._id ? { ...s, metadata: updatedMetadata } : s));
+        }).catch(err => console.error("Error updating student metadata:", err));
       } else {
         setBucket(prev => [...prev, student]);
         showToast(`Student ${student.roll} added to bucket.`, "success");
@@ -665,6 +681,7 @@ export default function App() {
       const data = await api.login(loginForm.username, loginForm.password);
       if (data.token) {
         login(data.token);
+        setViewMode("dashboard");
         showToast("Logged in successfully.", "success");
       } else {
         showToast(data.error || "Login failed", "error");
@@ -855,9 +872,38 @@ export default function App() {
             seatLabel: `${targetRoom.name}.-${targetAllotment.seatCode}-StudentRollno(${student.roll})`
           };
 
+          const updatedMetadata = {
+            ...targetStudent.metadata,
+            previousRoomName: targetRoom.name,
+            previousSeatLabel: targetAllotment.seatCode || getSeatLabel(targetRow - 1, targetCol),
+            previousDate: targetAllotment.date || date,
+            previousShift: String(targetAllotment.shift || shift)
+          };
+          const updatedTargetStudent = {
+            ...targetStudent,
+            previousSeat: {
+              roomName: targetRoom.name,
+              seatLabel: targetAllotment.seatCode || getSeatLabel(targetRow - 1, targetCol),
+              date: targetAllotment.date || date,
+              shift: targetAllotment.shift || shift
+            },
+            metadata: updatedMetadata
+          };
           updatedAllotments[targetIndex] = updatedTarget;
-          setBucket(prev => [...prev.filter(s => s._id !== studentId), targetStudent]);
+          setBucket(prev => [...prev.filter(s => s._id !== studentId), updatedTargetStudent]);
           showToast(`Placed ${student.roll} and moved ${targetStudent.roll} to bucket`, "success");
+
+          api.updateStudent(targetStudent._id, {
+            roll: targetStudent.roll,
+            name: targetStudent.name,
+            dept: targetStudent.dept,
+            sem: targetStudent.sem,
+            subject: targetStudent.subject,
+            examType: targetStudent.examType,
+            metadata: updatedMetadata
+          }, token).then(() => {
+            setAllStudents(prev => prev.map(s => s._id === targetStudent._id ? { ...s, metadata: updatedMetadata } : s));
+          }).catch(err => console.error("Error updating student metadata:", err));
         } else {
           const newAllotment = {
             student,
@@ -905,11 +951,40 @@ export default function App() {
         }
       }
 
+      const updatedMetadata = {
+        ...student.metadata,
+        previousRoomName: sourceAllotment.room.name,
+        previousSeatLabel: sourceAllotment.seatCode || getSeatLabel(sourceRow - 1, sourceCol),
+        previousDate: sourceAllotment.date || date,
+        previousShift: String(sourceAllotment.shift || shift)
+      };
+      const updatedStudent = {
+        ...student,
+        previousSeat: {
+          roomName: sourceAllotment.room.name,
+          seatLabel: sourceAllotment.seatCode || getSeatLabel(sourceRow - 1, sourceCol),
+          date: sourceAllotment.date || date,
+          shift: sourceAllotment.shift || shift
+        },
+        metadata: updatedMetadata
+      };
       const updatedAllotments = allotments.filter((_, idx) => idx !== sourceIndex);
       setAllotments(updatedAllotments);
-      setBucket(prev => [...prev, student]);
+      setBucket(prev => [...prev, updatedStudent]);
       showToast(`Unallotted ${student.roll} to bucket`, "success");
       saveManualAllotments(updatedAllotments);
+
+      api.updateStudent(student._id, {
+        roll: student.roll,
+        name: student.name,
+        dept: student.dept,
+        sem: student.sem,
+        subject: student.subject,
+        examType: student.examType,
+        metadata: updatedMetadata
+      }, token).then(() => {
+        setAllStudents(prev => prev.map(s => s._id === student._id ? { ...s, metadata: updatedMetadata } : s));
+      }).catch(err => console.error("Error updating student metadata:", err));
     } catch (err) {
       console.error(err);
       showToast("Error unallotting: " + err.message, "error");
@@ -987,6 +1062,69 @@ export default function App() {
 
   const handleTapStudent = (student, source, roomId = null, row = null, col = null) => {
     if (userRole !== "admin") return;
+
+    const isMobile = window.innerWidth < 768;
+
+    if (isMobile) {
+      if (source === "seat") {
+        setDialog({
+          isOpen: true,
+          type: "confirm",
+          title: "Seat Options (Phone)",
+          message: `Would you like to unallocate ${student.roll} (move to staging bucket)?\n\nClick 'Confirm' to unallocate, or 'Cancel' to select the student for reallocation.`,
+          onConfirm: () => {
+            executeUnallot(roomId, row, col);
+            closeDialog();
+          },
+          onCancel: () => {
+            setSelectedStudentForMove({
+              source,
+              studentId: student._id,
+              roomId,
+              row,
+              col,
+              roll: student.roll
+            });
+            showToast(`Selected ${student.roll}. Tap an empty seat to move them.`, "info");
+            closeDialog();
+          }
+        });
+        return;
+      } else if (source === "bucket") {
+        if (!rooms || rooms.length === 0) {
+          showToast("No classrooms available to allocate student.", "error");
+          return;
+        }
+        setDialog({
+          isOpen: true,
+          type: "select-class",
+          title: "Allocate to Class (Phone)",
+          message: `Select a class (room) to assign ${student.roll} (${student.name || ''}) to:`,
+          rooms: rooms,
+          onConfirm: (selectedRoomId) => {
+            if (!selectedRoomId) return;
+            const targetRoom = rooms.find(r => r._id === selectedRoomId);
+            setSelectedStudentForMove({
+              source: "bucket",
+              studentId: student._id,
+              roll: student.roll
+            });
+            setShowBucketSidebar(false);
+            setTimeout(() => {
+              const el = document.getElementById(`room-container-${selectedRoomId}`);
+              if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                showToast(`Selected ${student.roll}. Tap an empty seat in ${targetRoom?.name || 'class'} to place them.`, "info");
+              }
+            }, 300);
+            closeDialog();
+          },
+          onCancel: closeDialog
+        });
+        return;
+      }
+    }
+
     if (selectedStudentForMove && selectedStudentForMove.studentId === student._id) {
       setSelectedStudentForMove(null);
       showToast("Deselected student", "info");
@@ -1034,6 +1172,41 @@ export default function App() {
       selectedStudentForMove.col
     );
     setSelectedStudentForMove(null);
+  };
+
+  const handleAssignClick = (student) => {
+    if (userRole !== "admin") return;
+    if (!rooms || rooms.length === 0) {
+      showToast("No classrooms available to allocate student.", "error");
+      return;
+    }
+    setDialog({
+      isOpen: true,
+      type: "select-class",
+      title: "Allocate Student",
+      message: `Select a classroom (room) to assign ${student.roll} (${student.name || ''}) to:`,
+      rooms: rooms,
+      onConfirm: (selectedRoomId) => {
+        if (!selectedRoomId) return;
+        const targetRoom = rooms.find(r => r._id === selectedRoomId);
+        setSelectedStudentForMove({
+          source: "bucket",
+          studentId: student._id,
+          roll: student.roll
+        });
+        
+        setShowBucketSidebar(false);
+        
+        setTimeout(() => {
+          const el = document.getElementById(`room-container-${selectedRoomId}`);
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+            showToast(`Selected ${student.roll}. Tap/click an empty seat in ${targetRoom?.name || 'class'} to place them.`, "info");
+          }
+        }, 300);
+        closeDialog();
+      }
+    });
   };
 
   // STUDENT IMPORT PARSERS
@@ -2007,7 +2180,34 @@ export default function App() {
   }
 
   async function downloadCSV() {
-    window.open(api.getDownloadCSVUrl(shift, date), "_blank");
+    try {
+      const response = await fetch(api.getDownloadCSVUrl(shift, date), {
+        headers: {
+          ...authHeader(token),
+        },
+      });
+      if (!response.ok) {
+        let errMsg = "Download failed";
+        try {
+          const json = await response.json();
+          errMsg = json.error || errMsg;
+        } catch (_) {
+          errMsg = `HTTP error! Status: ${response.status}`;
+        }
+        throw new Error(errMsg);
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `allotment-${date}-shift-${shift}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      showToast(err.message, "error");
+    }
   }
 
   async function downloadRoomGrid(roomId, format = "csv") {
@@ -2015,7 +2215,36 @@ export default function App() {
     const url = format === "csv" 
       ? api.getRoomGridCsvUrl(roomId, shift, date) 
       : api.getRoomGridJsonUrl(roomId, shift, date);
-    window.open(url, "_blank");
+    
+    try {
+      const response = await fetch(url, {
+        headers: {
+          ...authHeader(token),
+        },
+      });
+      if (!response.ok) {
+        let errMsg = "Download failed";
+        try {
+          const json = await response.json();
+          errMsg = json.error || errMsg;
+        } catch (_) {
+          errMsg = `HTTP error! Status: ${response.status}`;
+        }
+        throw new Error(errMsg);
+      }
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      const fileExt = format === "csv" ? "csv" : "json";
+      a.download = `room-grid-${roomId}-${date}-shift-${shift}.${fileExt}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      showToast(err.message, "error");
+    }
   }
 
   function openMoviePreview(room) {
@@ -2417,6 +2646,9 @@ export default function App() {
         activeTab={activeTab} 
         setActiveTab={setActiveTab}
         onViewLanding={() => setViewMode("landing")}
+        showBucketSidebar={showBucketSidebar}
+        setShowBucketSidebar={setShowBucketSidebar}
+        bucketLength={bucket.length}
       >
         {/* TAB 1: STUDENTS */}
         <div id="Students">
@@ -2642,7 +2874,7 @@ export default function App() {
       {/* Floating Staging Bucket Sidebar */}
       <React.Suspense fallback={null}>
         <StagingBucket
-          isLoggedIn={isLoggedIn && activeTab === "Allotments"}
+          isLoggedIn={isLoggedIn && activeTab === "Allotment"}
           showBucketSidebar={showBucketSidebar}
           setShowBucketSidebar={setShowBucketSidebar}
           bucket={bucket}
@@ -2667,6 +2899,7 @@ export default function App() {
           selectedStudentForMove={selectedStudentForMove}
           handleTapStudent={handleTapStudent}
           handleTapBucket={handleTapBucket}
+          handleAssignClick={handleAssignClick}
         />
 
         {/* Spacing Layout Settings Dialog */}

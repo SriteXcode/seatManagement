@@ -98,6 +98,25 @@ export default function CustomDialog({ dialog, bucketLength, onClose }) {
             </div>
           )}
 
+          {/* Inputs for Select Class on Mobile */}
+          {dialog.type === 'select-class' && (
+            <div className="space-y-2">
+              <label className="block text-[10px] font-bold text-gray-500 uppercase">
+                Select Class (Room)
+              </label>
+              <select
+                id="dialog-room-select"
+                className="w-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/10 rounded-xl px-3 py-2 text-xs font-bold bg-white text-gray-800 cursor-pointer shadow-3xs transition-all"
+              >
+                {dialog.rooms?.map(room => (
+                  <option key={room._id} value={room._id}>
+                    {room.name} ({room.rows}x{room.cols})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Input fields for Add/Edit Room modal */}
           {(dialog.type === 'add-room' || dialog.type === 'edit-room') && (
             <div className="space-y-3">
@@ -142,7 +161,7 @@ export default function CustomDialog({ dialog, bucketLength, onClose }) {
           {dialog.type === 'import-conflict' ? (
             <>
               <button
-                onClick={onClose || dialog.onCancel}
+                onClick={dialog.onCancel || onClose}
                 className="border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold py-2 px-3.5 rounded-lg text-xs transition-colors cursor-pointer"
               >
                 Cancel
@@ -164,7 +183,7 @@ export default function CustomDialog({ dialog, bucketLength, onClose }) {
             <>
               {dialog.type !== 'alert' && (
                 <button
-                  onClick={onClose || dialog.onCancel}
+                  onClick={dialog.onCancel || onClose}
                   className="border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold py-2 px-4 rounded-lg text-xs transition-colors cursor-pointer"
                 >
                   Cancel
@@ -188,6 +207,10 @@ export default function CustomDialog({ dialog, bucketLength, onClose }) {
                     const checkboxEl = document.getElementById("dialog-include-bucket-checkbox");
                     const includeBucket = checkboxEl ? checkboxEl.checked : true;
                     dialog.onConfirm(includeBucket);
+                  } else if (dialog.type === 'select-class') {
+                    const roomSelect = document.getElementById("dialog-room-select");
+                    const selectedRoomId = roomSelect ? roomSelect.value : "";
+                    dialog.onConfirm(selectedRoomId);
                   } else {
                     dialog.onConfirm();
                   }

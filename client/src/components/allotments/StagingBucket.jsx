@@ -1,4 +1,5 @@
 import React from "react";
+import CustomSelect from "../common/CustomSelect";
 
 export default function StagingBucket({
   isLoggedIn,
@@ -26,6 +27,7 @@ export default function StagingBucket({
   selectedStudentForMove,
   handleTapStudent,
   handleTapBucket,
+  handleAssignClick,
 }) {
   if (!isLoggedIn) return null;
 
@@ -38,12 +40,14 @@ export default function StagingBucket({
           title="Open Staging Bucket"
           aria-label="Open Staging Bucket"
           aria-expanded={false}
-          className="fixed bottom-6 right-6 z-40 bg-red-700 hover:bg-red-800 text-white p-4 rounded-full shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center cursor-pointer group"
+          className="fixed bottom-6 right-6 md:right-[18.5rem] z-50 bg-red-700 hover:bg-red-800 text-white p-4 rounded-full shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center cursor-pointer group"
         >
-          <div className="relative">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-            </svg>
+          <div className="relative flex items-center justify-center">
+            <img 
+              src="https://img.icons8.com/?size=50&id=Anr2RtO0yx8e&format=png&color=FFFFFF" 
+              alt="Staging Bucket" 
+              className="w-6 h-6 object-contain" 
+            />
             {bucket.length > 0 && (
               <span className="absolute -top-2 -right-2 bg-black text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ring-2 ring-red-700">
                 {bucket.length}
@@ -55,17 +59,19 @@ export default function StagingBucket({
 
       {/* Right Slide-over Staging Bucket Sidebar */}
       <div 
-        className={`fixed top-0 right-0 h-screen z-50 bg-white border-l border-gray-200 shadow-2xl flex flex-col transition-all duration-300 transform w-full max-w-[20rem] sm:max-w-md ${
+        className={`fixed top-0 right-0 h-screen z-50 bg-white border-l border-gray-200 shadow-2xl flex flex-col transition-all duration-300 transform w-full sm:max-w-md ${
           showBucketSidebar ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
         {/* Sidebar Header */}
         <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100 bg-gray-50/50 bg-white">
           <div className="flex items-center gap-2">
-            <span className="p-1.5 bg-red-50 text-red-700 rounded-lg">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
+            <span className="p-1.5 bg-red-50 rounded-lg flex items-center justify-center w-8 h-8">
+              <img 
+                src="https://img.icons8.com/?size=50&id=Anr2RtO0yx8e&format=png&color=B91C1C" 
+                alt="Bucket Icon" 
+                className="w-5 h-5 object-contain" 
+              />
             </span>
             <div>
               <h3 className="font-bold text-gray-800 text-sm">Staging Bucket</h3>
@@ -75,9 +81,9 @@ export default function StagingBucket({
           <button 
             onClick={() => setShowBucketSidebar(false)}
             aria-label="Close Staging Bucket"
-            className="text-gray-400 hover:text-gray-600 text-xl font-bold p-1 cursor-pointer"
+            className="text-gray-400 hover:text-red-700 hover:bg-red-55 p-1.5 rounded-lg transition-colors cursor-pointer flex items-center justify-center"
           >
-            &times;
+            <i className="las la-times text-lg"></i>
           </button>
         </div>
 
@@ -106,45 +112,54 @@ export default function StagingBucket({
 
         {/* Filter students in bucket */}
         {bucket.length > 0 && (
-          <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50 animate-fadeIn space-y-2">
+          <div className="px-4 py-3 border-b border-gray-150 bg-gray-50/60 space-y-3">
             <div className="flex gap-2">
               {/* Dropdown 1: Filter Criteria Key */}
-              <select
-                value={bucketFilterKey}
-                onChange={(e) => setBucketFilterKey(e.target.value)}
-                className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white text-black focus:outline-none focus:ring-1 focus:ring-red-500 font-semibold cursor-pointer"
-              >
-                <option value="all">Search All Fields</option>
-                <option value="dept">{getFieldLabel('constraint_1')}</option>
-                <option value="sem">{getFieldLabel('constraint_2')}</option>
-                <option value="subject">Subject</option>
-              </select>
+              <div className="flex-1 min-w-0">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Search By</label>
+                <CustomSelect
+                  value={bucketFilterKey}
+                  onChange={setBucketFilterKey}
+                  options={[
+                    { value: "all", label: "Search All Fields" },
+                    { value: "dept", label: getFieldLabel('constraint_1') },
+                    { value: "sem", label: getFieldLabel('constraint_2') },
+                    { value: "subject", label: "Subject" }
+                  ]}
+                  className="w-full z-50"
+                />
+              </div>
 
               {/* Dropdown 2: Value Selector */}
               {bucketFilterKey !== "all" && (
-                <select
-                  value={bucketFilterVal}
-                  onChange={(e) => setBucketFilterVal(e.target.value)}
-                  className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white text-black focus:outline-none focus:ring-1 focus:ring-red-500 font-semibold animate-fadeIn cursor-pointer"
-                >
-                  <option value="">
-                    All {bucketFilterKey === "dept" ? getFieldLabel('constraint_1') : bucketFilterKey === "sem" ? getFieldLabel('constraint_2') : "Subject"}s
-                  </option>
-                  {uniqueBucketValues.map(val => (
-                    <option key={val} value={val}>{val}</option>
-                  ))}
-                </select>
+                <div className="flex-1 min-w-0 animate-fadeIn">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1 z-50">Select Value</label>
+                  <CustomSelect
+                    value={bucketFilterVal}
+                    onChange={setBucketFilterVal}
+                    options={[
+                      { value: "", label: `All ${bucketFilterKey === "dept" ? getFieldLabel('constraint_1') : bucketFilterKey === "sem" ? getFieldLabel('constraint_2') : "Subject"}s` },
+                      ...uniqueBucketValues.map(val => ({ value: val, label: val }))
+                    ]}
+                    className="w-full"
+                  />
+                </div>
               )}
             </div>
 
             {/* Optional search query input */}
-            <input
-              type="text"
-              placeholder="Filter by name or roll..."
-              value={bucketFilter}
-              onChange={(e) => setBucketFilter(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-white text-black focus:outline-none focus:ring-1 focus:ring-red-500 font-semibold"
-            />
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <i className="las la-search text-gray-400 text-sm"></i>
+              </span>
+              <input
+                type="text"
+                placeholder="Type name, roll, dept..."
+                value={bucketFilter}
+                onChange={(e) => setBucketFilter(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-xs bg-white text-black focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all font-semibold shadow-2xs placeholder-gray-400"
+              />
+            </div>
           </div>
         )}
 
@@ -246,6 +261,12 @@ export default function StagingBucket({
               <div className="space-y-2.5 animate-fadeIn select-none">
                 {filteredBucket.map(student => {
                   const isSelected = selectedStudentForMove && selectedStudentForMove.studentId === student._id;
+                  const prevSeat = student.previousSeat || (student.metadata && student.metadata.previousRoomName ? {
+                    roomName: student.metadata.previousRoomName,
+                    seatLabel: student.metadata.previousSeatLabel,
+                    date: student.metadata.previousDate,
+                    shift: student.metadata.previousShift
+                  } : null);
                   return (
                     <div
                       key={student._id}
@@ -258,7 +279,7 @@ export default function StagingBucket({
                           handleTapStudent(student, 'bucket');
                         }
                       }}
-                      className={`p-3 bg-white border border-gray-150 rounded-xl shadow-xs transition-all flex items-center justify-between select-none cursor-pointer ${
+                      className={`p-3 bg-white border border-gray-150 rounded-xl shadow-xs transition-all flex flex-col sm:flex-row sm:items-start sm:justify-between select-none cursor-pointer ${
                         userRole === "admin"
                           ? isSelected
                             ? "ring-2 ring-red-500 bg-red-50/20 scale-[1.01]"
@@ -266,16 +287,47 @@ export default function StagingBucket({
                           : ""
                       }`}
                     >
-                      <div className="select-none">
-                        <div className="font-bold text-gray-800 text-xs select-none">{student.roll}</div>
-                        <div className="text-[10px] text-gray-500 font-semibold mt-0.5 select-none">{student.name}</div>
-                        <div className="text-[9px] font-bold text-red-700 bg-red-50/50 border border-red-100 rounded-md px-1.5 py-0.5 inline-block mt-1 uppercase tracking-wider select-none">
-                          {student.dept} | {getFieldLabel('constraint_2')}: {student.sem}
+                      <div className="flex-1 min-w-0 select-none space-y-1.5 w-full">
+                        <div>
+                          <div className="font-bold text-gray-800 text-xs sm:text-sm select-none">{student.roll}</div>
+                          <div className="text-[11px] sm:text-xs text-gray-500 font-semibold mt-0.5 select-none">{student.name}</div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5 select-none w-full">
+                          <div className="text-[10px] font-bold text-red-700 bg-red-50/50 border border-red-100 rounded-md px-2 py-0.5 uppercase tracking-wider select-none max-w-full whitespace-normal break-all shrink-0">
+                            {student.dept} | {getFieldLabel('constraint_2')}: {student.sem}
+                          </div>
+                          {prevSeat && (
+                            <>
+                              <div className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-100 rounded-md px-2 py-0.5 uppercase tracking-wider select-none max-w-full whitespace-normal break-all shrink-0" title={`Previously allotted to Room ${prevSeat.roomName}`}>
+                                Class Name: {prevSeat.roomName}
+                              </div>
+                              <div className="text-[10px] font-bold text-teal-700 bg-teal-50 border border-teal-100 rounded-md px-2 py-0.5 uppercase tracking-wider select-none max-w-full whitespace-normal break-all shrink-0" title={`Previous Seat: ${prevSeat.seatLabel}`}>
+                                Previous Seat: {prevSeat.seatLabel}
+                              </div>
+                              <div className="text-[10px] font-bold text-blue-700 bg-blue-50/50 border border-blue-100 rounded-md px-2 py-0.5 uppercase tracking-wider select-none max-w-full whitespace-normal break-all shrink-0" title={`Previous schedule: ${prevSeat.date} (Shift ${prevSeat.shift})`}>
+                                Schedule: {prevSeat.date} (S{prevSeat.shift})
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
                       {userRole === "admin" && (
-                        <div className="text-[9px] text-gray-450 font-bold uppercase tracking-wider select-none">
-                          {isSelected ? "Selected" : "Drag"}
+                        <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2.5 shrink-0 w-full sm:w-auto border-t sm:border-t-0 border-gray-100 pt-2.5 sm:pt-0 mt-2.5 sm:mt-0 select-none">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAssignClick(student);
+                            }}
+                            className="bg-red-50 hover:bg-red-100 text-red-700 font-bold px-3 py-1.5 rounded-lg text-[10px] transition-all cursor-pointer flex items-center justify-center gap-1 shadow-2xs border border-red-200 hover:scale-105 active:scale-95 flex-1 sm:flex-none text-center min-h-[30px]"
+               title="Assign to classroom"
+                          >
+                            <i className="las la-user-plus text-xs"></i>
+                            Assign
+                          </button>
+                          <div className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider">
+                            {isSelected ? "Selected" : "Drag"}
+                          </div>
                         </div>
                       )}
                     </div>

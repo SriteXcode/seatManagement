@@ -193,7 +193,7 @@ export const api = {
     }, token),
 
   // Downloads / External File APIs (return absolute URLs for iframe / download)
-  getDownloadCSVUrl: (shift, date) => `${API_BASE}/allotments/download-csv?shift=${shift}&date=${date}`,
-  getRoomGridCsvUrl: (roomId, shift, date) => `${API_BASE}/allotments/room-grid-csv?roomId=${roomId}&shift=${shift}&date=${date}`,
-  getRoomGridJsonUrl: (roomId, shift, date) => `${API_BASE}/allotments/room-grid-json?roomId=${roomId}&shift=${shift}&date=${date}`,
+  getDownloadCSVUrl: (shift, date) => `${API_BASE}/export/csv?shift=${shift}&date=${date}`,
+  getRoomGridCsvUrl: (roomId, shift, date) => `${API_BASE}/export/room-grid?roomId=${roomId}&shift=${shift}&date=${date}&format=csv`,
+  getRoomGridJsonUrl: (roomId, shift, date) => `${API_BASE}/export/room-grid?roomId=${roomId}&shift=${shift}&date=${date}&format=json`,
 };

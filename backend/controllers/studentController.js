@@ -90,10 +90,33 @@ export const addStudent = async (req, res) => {
 
 export const updateStudent = async (req, res) => {
   try {
-    const { roll, name, dept, sem, subject, examType } = req.body;
+    const { roll, name, dept, sem, subject, examType, metadata } = req.body;
     if (await Student.findOne({ roll, orgCode: req.user.adminCode, _id: { $ne: req.params.id } })) return res.status(400).json({ error: "Exists" });
-    const s = await Student.findOneAndUpdate({ _id: req.params.id, orgCode: req.user.adminCode }, { roll, name, dept, sem, shift: getShift(sem), subject: Array.isArray(subject) ? subject : (subject ? [subject] : []), examType: examType || "College" }, { new: true });
+    
+    const s = await Student.findOne({ _id: req.params.id, orgCode: req.user.adminCode });
     if (!s) return res.status(404).json({ error: "Not found" });
+
+    if (roll !== undefined) s.roll = roll;
+    if (name !== undefined) s.name = name;
+    if (dept !== undefined) s.dept = dept;
+    if (sem !== undefined) {
+      s.sem = sem;
+      s.shift = getShift(sem);
+    }
+    if (subject !== undefined) s.subject = Array.isArray(subject) ? subject : (subject ? [subject] : []);
+    if (examType !== undefined) s.examType = examType || "College";
+    if (metadata !== undefined) {
+      if (s.metadata) {
+        s.metadata.clear();
+        Object.entries(metadata).forEach(([k, v]) => {
+          s.metadata.set(k, v);
+        });
+      } else {
+        s.metadata = metadata;
+      }
+    }
+
+    await s.save();
     res.json(s);
   } catch (e) { res.status(500).json({ error: e.message }); }
 };

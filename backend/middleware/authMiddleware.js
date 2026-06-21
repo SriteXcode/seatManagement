@@ -2,9 +2,17 @@ import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 
 export const authMiddleware = (req, res, next) => {
+  let token = null;
   const h = req.headers["authorization"];
-  if (!h) return res.status(401).json({ error: "Missing auth header" });
-  const token = h.split(" ")[1];
+  if (h && h.startsWith("Bearer ")) {
+    token = h.split(" ")[1];
+  } else if (h) {
+    token = h;
+  } else if (req.query.token) {
+    token = req.query.token;
+  }
+
+  if (!token) return res.status(401).json({ error: "Missing auth header" });
   try {
     const p = jwt.verify(token, process.env.JWT_SECRET);
     req.user = p;

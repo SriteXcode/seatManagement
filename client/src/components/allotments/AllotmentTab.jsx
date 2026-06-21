@@ -82,6 +82,19 @@ export default function AllotmentTab({
   const decoded = decodeToken(token);
   const isLoggedIn = Boolean(token);
   const [showComments, setShowComments] = React.useState(false);
+  const [hoveredSeat, setHoveredSeat] = React.useState(null);
+  const [windowSize, setWindowSize] = React.useState({ width: 1200, height: 800 });
+
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      setWindowSize({ width: window.innerWidth, height: window.innerHeight });
+      const handleResize = () => {
+        setWindowSize({ width: window.innerWidth, height: window.innerHeight });
+      };
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
   const activeSavedSchedule = schedules.find(s => s.date === date && s.shift === shift);
   const activeSavedConfig = activeSavedSchedule 
     ? (examConfigs.find(c => c.examType === (activeSavedSchedule.examType || 'College')) || activeConfig)
@@ -122,15 +135,35 @@ export default function AllotmentTab({
               />
             </div>
             <div className="flex flex-col">
-              <label className="text-xs font-semibold text-gray-600 mb-0.5">Date</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} className="border border-gray-250 rounded px-2.5 py-1 text-xs text-black" />
+              <label className="text-[10px] font-bold text-red-700 uppercase tracking-wider mb-1">Date</label>
+              <div className="relative">
+                <input 
+                  type="date" 
+                  value={date} 
+                  onChange={e => setDate(e.target.value)} 
+                  className="w-40 border border-gray-200 hover:border-red-300 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/15 rounded-lg pl-3 pr-8 py-1.5 text-xs bg-white text-black font-semibold cursor-pointer shadow-2xs min-h-[32px] transition-all" 
+                />
+                <span className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-red-600">
+                  <i className="las la-calendar text-sm"></i>
+                </span>
+              </div>
             </div>
             <div className="flex flex-col">
-              <label className="text-xs font-semibold text-gray-600 mb-0.5">Time</label>
-              <input type="time" value={time} onChange={e => setTime(e.target.value)} className="border border-gray-250 rounded px-2.5 py-1 text-xs text-black" />
+              <label className="text-[10px] font-bold text-red-700 uppercase tracking-wider mb-1">Time</label>
+              <div className="relative">
+                <input 
+                  type="time" 
+                  value={time} 
+                  onChange={e => setTime(e.target.value)} 
+                  className="w-40 border border-gray-200 hover:border-red-300 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/15 rounded-lg pl-3 pr-8 py-1.5 text-xs bg-white text-black font-semibold cursor-pointer shadow-2xs min-h-[32px] transition-all" 
+                />
+                <span className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-red-600">
+                  <i className="las la-clock text-sm"></i>
+                </span>
+              </div>
             </div>
             <div className="flex flex-col">
-              <label className="text-xs font-semibold text-gray-600 mb-1">Shift</label>
+              <label className="text-[10px] font-bold text-red-700 uppercase tracking-wider mb-1">Shift</label>
               <CustomSelect
                 value={shift}
                 onChange={(val) => setShift(Number(val))}
@@ -143,8 +176,13 @@ export default function AllotmentTab({
               />
             </div>
             <div className="flex flex-col">
-              <label className="text-xs font-semibold text-gray-600 mb-0.5">Seed</label>
-              <input type="number" value={seed} onChange={e => setSeed(Number(e.target.value))} className="border border-gray-250 rounded px-2.5 py-1 text-xs w-20 text-black" />
+              <label className="text-[10px] font-bold text-red-700 uppercase tracking-wider mb-1">Seed</label>
+              <input 
+                type="number" 
+                value={seed} 
+                onChange={e => setSeed(Number(e.target.value))} 
+                className="w-20 border border-gray-200 hover:border-red-300 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/15 rounded-lg px-3 py-1.5 text-xs bg-white text-black font-semibold shadow-2xs min-h-[32px] transition-all" 
+              />
             </div>
           </div>
 
@@ -376,100 +414,117 @@ export default function AllotmentTab({
               </button>
             ))}
           </div>
-
-          {/* Selected Saved Schedule Details */}
           {schedules.some(s => s.date === date && s.shift === shift) && (
-            <div className="mt-5 p-4 border border-red-200 bg-red-50/10 rounded-xl">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <h4 className="font-bold text-red-700 text-sm flex items-center gap-1.5 select-none">
-                    <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
-                    Selected saved arrangement details
+            <div className="mt-5 p-5 border-l-4 border-l-red-700 border border-gray-200 bg-red-50/5 rounded-2xl shadow-xs select-none">
+              <div className="flex flex-col lg:flex-row lg:items-stretch gap-6">
+                
+                {/* Details Section */}
+                <div className="flex-1 space-y-4">
+                  <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-650 animate-pulse shrink-0"></span>
+                    Active Saved Schedule Configuration
                   </h4>
-                  <div className="text-xs text-black mt-1.5 space-y-1 select-none">
-                    <div>
-                      <strong className="text-gray-600">Date:</strong> {date} &nbsp;|&nbsp; 
-                      <strong className="text-gray-600">Shift:</strong> {shift} {time ? `(${time})` : ''} &nbsp;|&nbsp;
-                      <strong className="text-gray-600">Type:</strong> <span className="bg-red-105 text-red-700 px-2 py-0.5 rounded font-bold uppercase text-[9px]">{activeSavedSchedule?.examType || 'College'}</span>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Date & Shift */}
+                    <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-3xs">
+                      <div className="p-2 bg-red-50 text-red-700 rounded-lg flex items-center justify-center shrink-0">
+                        <i className="las la-calendar-day text-lg"></i>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block">Slot Details</span>
+                        <span className="text-xs font-bold text-gray-850">
+                          {date} ({shift})
+                        </span>
+                      </div>
                     </div>
-                    <div>
-                      <strong className="text-gray-600">{plural(label1)}:</strong>{' '}
-                      {selectedScheduleCombos.length > 0 ? (
-                        <span className="text-black font-semibold">{selectedScheduleCombos.join(', ')}</span>
-                      ) : (
-                        <span className="text-gray-400 italic">No allotments found for this slot.</span>
-                      )}
+
+                    {/* Exam Type */}
+                    <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-3xs">
+                      <div className="p-2 bg-purple-50 text-purple-700 rounded-lg flex items-center justify-center shrink-0">
+                        <i className="las la-file-alt text-lg"></i>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block">Exam Type</span>
+                        <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-md font-bold uppercase text-[9px] inline-block mt-0.5">
+                          {activeSavedSchedule?.examType || 'College'}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
-                <div className="flex items-end gap-3 flex-wrap select-none">
-                  <button
-                    type="button"
-                    onClick={() => saveToLibrary(activeSavedSchedule)}
-                    className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-sm cursor-pointer h-[38px] flex items-center justify-center gap-1.5 animate-fadeIn"
-                    title="Save this arrangement to your library"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                    </svg>
-                    Save to Library
-                  </button>
-                  
-                  {userRole === "admin" && (
-                    <>
-                      {isLayoutSettingsLocked ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsLayoutSettingsLocked(false);
-                            if (showToast) showToast("Spacing settings unlocked for editing.", "success");
-                          }}
-                          className="bg-yellow-600 hover:bg-yellow-755 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-sm cursor-pointer h-[38px] flex items-center justify-center gap-1.5"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
-                          </svg>
-                          Unlock Spacing Settings
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsLayoutSettingsLocked(true);
-                            if (showToast) showToast("Spacing settings locked.", "info");
-                          }}
-                          className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-sm cursor-pointer h-[38px] flex items-center justify-center gap-1.5"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                          </svg>
-                          Lock Spacing Settings
-                        </button>
-                      )}
-                    </>
-                  )}
 
-                  <div className="flex flex-col">
-                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Regeneration Seed</label>
-                    <input
-                      type="number"
-                      value={seed}
-                      disabled={userRole !== "admin"}
-                      onChange={e => setSeed(Number(e.target.value))}
-                      className={`border rounded px-3 py-1.5 w-24 text-xs font-bold ${userRole !== "admin" ? "bg-gray-100 text-gray-500 cursor-not-allowed" : "bg-white text-black"}`}
-                      placeholder="Seed"
-                    />
-                  </div>
-
-                  {userRole === "admin" && (
+                {/* Actions Section */}
+                <div className="flex flex-col sm:flex-row lg:flex-col gap-3.5 justify-center min-w-[240px] shrink-0 border-t lg:border-t-0 lg:border-l border-gray-100 pt-5 lg:pt-0 lg:pl-5">
+                  <div className="flex gap-2 flex-1 sm:flex-none">
                     <button
-                      onClick={regenerateSchedule}
-                      className="bg-red-700 hover:bg-red-800 text-white px-4 py-2 rounded text-xs font-bold transition-all shadow-sm h-[38px] cursor-pointer"
+                      type="button"
+                      onClick={() => saveToLibrary(activeSavedSchedule)}
+                      className="flex-1 bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center justify-center gap-1.5 hover:scale-[1.02] active:scale-98"
+                      title="Save this arrangement to your library"
                     >
-                      Regenerate Arrangement
+                      <i className="las la-bookmark text-sm"></i>
+                      Save to Library
                     </button>
-                  )}
+
+                    {userRole === "admin" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsLayoutSettingsLocked(!isLayoutSettingsLocked);
+                          if (showToast) {
+                            showToast(
+                              isLayoutSettingsLocked ? "Spacing settings unlocked for editing." : "Spacing settings locked.",
+                              isLayoutSettingsLocked ? "success" : "info"
+                            );
+                          }
+                        }}
+                        className={`flex-1 text-white px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center justify-center gap-1.5 hover:scale-[1.02] active:scale-98 ${
+                          isLayoutSettingsLocked 
+                            ? 'bg-yellow-600 hover:bg-yellow-755' 
+                            : 'bg-green-600 hover:bg-green-700'
+                        }`}
+                      >
+                        <i className={`las ${isLayoutSettingsLocked ? 'la-unlock' : 'la-lock'} text-sm`}></i>
+                        {isLayoutSettingsLocked ? 'Unlock Layout' : 'Lock Layout'}
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2.5 items-end flex-1 sm:flex-none">
+                    {/* Layout Seed Input */}
+                    <div className="flex flex-col flex-1">
+                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">Layout Seed</label>
+                      <div className="relative">
+                        <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-450">
+                          <i className="las la-random text-xs"></i>
+                        </span>
+                        <input
+                          type="number"
+                          value={seed}
+                          disabled={userRole !== "admin"}
+                          onChange={e => setSeed(Number(e.target.value))}
+                          className={`border border-gray-200 rounded-xl pl-7 pr-2 py-1.5 w-full text-xs font-bold focus:outline-none focus:ring-1 focus:ring-red-500/50 ${
+                            userRole !== "admin" ? "bg-gray-50 text-gray-400 cursor-not-allowed" : "bg-white text-black"
+                          }`}
+                          placeholder="Seed"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Regenerate Button */}
+                    {userRole === "admin" && (
+                      <button
+                        onClick={regenerateSchedule}
+                        className="flex-1 bg-red-700 hover:bg-red-800 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs h-[32px] cursor-pointer flex items-center justify-center gap-1 hover:scale-[1.02] active:scale-98 shrink-0"
+                      >
+                        <i className="las la-sync"></i>
+                        Regenerate
+                      </button>
+                    )}
+                  </div>
                 </div>
+
               </div>
 
               {/* Comments/Discussion Section */}
@@ -579,9 +634,11 @@ export default function AllotmentTab({
                 onClick={() => setShowBucketSidebar(prev => !prev)}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg border border-red-200 text-xs font-semibold transition-all cursor-pointer shadow-xs animate-fadeIn"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
+                <img 
+                  src="https://img.icons8.com/?size=30&id=Anr2RtO0yx8e&format=png&color=B91C1C" 
+                  alt="Staging Bucket" 
+                  className="w-4 h-4 object-contain" 
+                />
                 {showBucketSidebar ? 'Hide Staging Bucket' : `Show Staging Bucket (${bucket.length})`}
               </button>
             )}
@@ -623,13 +680,18 @@ export default function AllotmentTab({
               : undefined;
 
             return (
-              <div key={room._id} className="animate-fadeIn">
+              <div key={room._id} className="animate-fadeIn" id={`room-container-${room._id}`}>
                 <div className="flex items-center justify-between mb-2 select-none">
                   <h4 className="font-bold text-gray-800 text-sm">
                     {room.name} — {room.rows}×{room.cols}
                     {roomSubject && <span className="text-xs bg-red-100 text-red-750 px-2 py-0.5 rounded-full font-semibold ml-2">{roomSubject}</span>}
                     <span className="font-normal text-xs text-gray-500 ml-2">
-                      ({invigAssignments.find(a => a.room._id === room._id)?.invigilator.name || "Not Assigned"})
+                      ({(() => {
+                        const teacher = invigAssignments.find(a => a.room._id === room._id)?.invigilator;
+                        if (!teacher) return "Not Assigned";
+                        const firstName = teacher.name.trim().split(/\s+/)[0];
+                        return `${firstName} Sir`;
+                      })()})
                     </span>
                   </h4>
                   <div className="text-[10px] text-gray-400 font-semibold">Hover a seat for details</div>
@@ -696,6 +758,22 @@ export default function AllotmentTab({
                                 handleTapEmptySeat(room, row, col);
                               }
                             }}
+                            onMouseMove={(e) => {
+                              if (isHidden) return;
+                              setHoveredSeat({
+                                entry: entry && isVisible ? entry : null,
+                                seatCode,
+                                isLayoutGap,
+                                roomName: room.name,
+                                row,
+                                col,
+                                x: e.clientX,
+                                y: e.clientY
+                              });
+                            }}
+                            onMouseLeave={() => {
+                              setHoveredSeat(null);
+                            }}
                             className={`w-16 h-14 flex items-center justify-center text-[10px] text-center p-1 transition-all rounded-lg border select-none ${
                               isHidden
                                 ? 'border-none bg-transparent opacity-0 text-transparent pointer-events-none'
@@ -709,12 +787,6 @@ export default function AllotmentTab({
                               } ${
                                 isSelected ? 'ring-2 ring-red-500 scale-105 z-20 bg-red-50/40' : ''
                               }`}
-                            title={entry ? [
-                              `Name: ${entry.student.name}`,
-                              `${getFieldLabel('constraint_1')}: ${entry.student.dept}`,
-                              `${getFieldLabel('constraint_2')}: ${entry.student.sem}`,
-                              entry.student.metadata ? Object.entries(entry.student.metadata).map(([k, v]) => `${k}: ${v}`).join('\n') : ''
-                            ].filter(Boolean).join('\n') : isHidden ? '' : isLayoutGap ? 'Distancing Layout Gap' : 'Empty Seat'}
                           >
                             {isVisible && entry ? (
                               <div
@@ -746,6 +818,98 @@ export default function AllotmentTab({
           })}
         </div>
       </section>
+
+      {/* Styled hover tooltip for seats */}
+      {hoveredSeat && (
+        <div 
+          className="fixed z-[9999] pointer-events-none bg-slate-900/95 backdrop-blur-md text-white border border-slate-700/50 shadow-2xl rounded-2xl p-4 w-64 select-none flex flex-col gap-3 transition-all duration-150 ease-out"
+          style={{ 
+            top: 0,
+            left: 0,
+            transform: `translate3d(${Math.max(10, Math.min(windowSize.width - 270, hoveredSeat.x + 15))}px, ${Math.max(10, Math.min(windowSize.height - 220, hoveredSeat.y + 15))}px, 0)`
+          }}
+        >
+          {hoveredSeat.entry ? (
+            <>
+              {/* Header with Student Name */}
+              <div className="border-b border-slate-800 pb-2">
+                <div className="text-[10px] text-red-400 font-bold uppercase tracking-widest mb-0.5">Student Details</div>
+                <div className="font-extrabold text-sm text-white tracking-tight leading-tight">
+                  {hoveredSeat.entry.student.name}
+                </div>
+              </div>
+
+              {/* Info Grid */}
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="flex flex-col">
+                  <span className="text-[9px] text-slate-400 uppercase font-semibold">Roll No</span>
+                  <span className="font-bold text-white flex items-center gap-1 mt-0.5">
+                    <i className="las la-id-badge text-red-400"></i>
+                    {hoveredSeat.entry.student.roll}
+                  </span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[9px] text-slate-400 uppercase font-semibold">Seat Code</span>
+                  <span className="font-bold text-yellow-400 flex items-center gap-1 mt-0.5">
+                    <i className="las la-chair"></i>
+                    {hoveredSeat.seatCode}
+                  </span>
+                </div>
+                <div className="flex flex-col col-span-2 bg-slate-800/40 rounded-lg p-1.5 border border-slate-800">
+                  <span className="text-[9px] text-slate-400 uppercase font-semibold">Department & Sem</span>
+                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                    <span className="px-2 py-0.5 bg-red-500/20 text-red-300 rounded-md font-bold text-[10px] border border-red-500/30">
+                      {hoveredSeat.entry.student.dept}
+                    </span>
+                    <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 rounded-md font-bold text-[10px] border border-blue-500/30">
+                      Sem {hoveredSeat.entry.student.sem}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Metadata section if it exists */}
+              {hoveredSeat.entry.student.metadata && Object.keys(hoveredSeat.entry.student.metadata).length > 0 && (
+                <div className="border-t border-slate-800 pt-2 text-[10px] space-y-1">
+                  {Object.entries(hoveredSeat.entry.student.metadata).map(([k, v]) => (
+                    <div key={k} className="flex justify-between text-slate-300">
+                      <span className="font-medium text-slate-400">{k}:</span>
+                      <span className="font-bold text-white">{v}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : hoveredSeat.isLayoutGap ? (
+            <div className="flex flex-col items-center justify-center py-2 text-center">
+              <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 mb-2">
+                <i className="las la-arrows-alt-h text-xl"></i>
+              </div>
+              <span className="font-extrabold text-xs text-white">Distancing Gap</span>
+              <span className="text-[9px] text-slate-400 mt-0.5">Physical space kept for exam distancing</span>
+            </div>
+          ) : (
+            <div className="flex flex-col">
+              <div className="border-b border-slate-800 pb-2 mb-2">
+                <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-0.5">Seat Status</div>
+                <div className="font-extrabold text-sm text-yellow-400 flex items-center gap-1.5 mt-0.5">
+                  <i className="las la-chair text-lg"></i> Empty Seat
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="flex flex-col">
+                  <span className="text-[9px] text-slate-400 uppercase font-semibold">Location</span>
+                  <span className="font-bold text-white mt-0.5">{hoveredSeat.roomName}</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[9px] text-slate-400 uppercase font-semibold">Position</span>
+                  <span className="font-bold text-white mt-0.5">R{hoveredSeat.row} : C{hoveredSeat.col}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

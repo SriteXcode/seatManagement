@@ -27,7 +27,7 @@ export default function DutyChart({ token }) {
       const schedData = await schedRes.json();
       
       // 2. Fetch Invigilators
-      const invRes = await fetch(`${API}/invigilators`, { headers: authHeader(token) });
+      const invRes = await fetch(`${API}/staff/invigilators`, { headers: authHeader(token) });
       const invData = await invRes.json();
 
       setSchedules(schedData);
@@ -37,7 +37,7 @@ export default function DutyChart({ token }) {
       const newMap = {}; // { invigilatorId: { date_shift: roomName } }
 
       const requests = schedData.map(s => 
-        fetch(`${API}/invigilator-assignments?date=${s.date}&shift=${s.shift}`, { headers: authHeader(token) })
+        fetch(`${API}/staff/assignments?date=${s.date}&shift=${s.shift}`, { headers: authHeader(token) })
           .then(r => r.json())
           .then(assignments => ({ schedule: s, assignments }))
       );
