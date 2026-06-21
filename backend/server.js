@@ -17,6 +17,7 @@ import staffRoutes from "./routes/staffRoutes.js";
 import libraryRoutes from "./routes/libraryRoutes.js";
 import commentRoutes from "./routes/commentRoutes.js";
 import configRoutes from "./routes/configRoutes.js";
+import formRoutes from "./routes/formRoutes.js";
 
 dotenv.config();
 
@@ -74,11 +75,13 @@ app.use(globalLimiter);
 
 app.use("/students", studentRoutes);
 app.use("/rooms", roomRoutes);
-app.use("/", allotmentRoutes); // Mounted at root for /generate, /allotments, etc.
 app.use("/staff", staffRoutes);
 app.use("/library", libraryRoutes);
 app.use("/comments", commentRoutes);
 app.use("/exam-configs", configRoutes);
+app.use("/form-configs", formRoutes);
+app.use("/", allotmentRoutes); // Mounted at root for /generate, /allotments, etc.
+
 
 app.get("/health", (req, res) => {
   const dbStatus = mongoose.connection.readyState === 1 ? "connected" : "disconnected";

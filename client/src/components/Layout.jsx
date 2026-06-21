@@ -42,6 +42,8 @@ export default function Layout({
         return "las la-briefcase";
       case "Profile":
         return "las la-user-circle";
+      case "Form Builder":
+        return "las la-clipboard-list";
       default:
         return "las la-link";
     }

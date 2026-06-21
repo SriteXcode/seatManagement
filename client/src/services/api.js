@@ -192,6 +192,40 @@ export const api = {
       method: "DELETE",
     }, token),
 
+  // Form Configs & Public Registration
+  listFormConfigs: (token) =>
+    request("/form-configs", {}, token),
+  saveFormConfigById: (configData, token) =>
+    request("/form-configs/save", {
+      method: "POST",
+      body: JSON.stringify(configData)
+    }, token),
+  deleteFormConfigById: (id, token) =>
+    request(`/form-configs/${id}`, {
+      method: "DELETE"
+    }, token),
+  getPublicFormConfigById: (orgCode, id) =>
+    request(`/form-configs/public/by-id/${encodeURIComponent(orgCode)}/${encodeURIComponent(id)}`),
+  registerStudentPublicById: (orgCode, id, studentData) =>
+    request(`/form-configs/public/register/by-id/${encodeURIComponent(orgCode)}/${encodeURIComponent(id)}`, {
+      method: "POST",
+      body: JSON.stringify(studentData)
+    }),
+  getFormConfig: (examType, token) => 
+    request(`/form-configs/${encodeURIComponent(examType)}`, {}, token),
+  saveFormConfig: (examType, configData, token) => 
+    request(`/form-configs/${encodeURIComponent(examType)}`, {
+      method: "POST",
+      body: JSON.stringify(configData)
+    }, token),
+  getPublicFormConfig: (orgCode, examType) => 
+    request(`/form-configs/public/${encodeURIComponent(orgCode)}/${encodeURIComponent(examType)}`),
+  registerStudentPublic: (orgCode, examType, studentData) => 
+    request(`/form-configs/public/register/${encodeURIComponent(orgCode)}/${encodeURIComponent(examType)}`, {
+      method: "POST",
+      body: JSON.stringify(studentData)
+    }),
+
   // Downloads / External File APIs (return absolute URLs for iframe / download)
   getDownloadCSVUrl: (shift, date) => `${API_BASE}/export/csv?shift=${shift}&date=${date}`,
   getRoomGridCsvUrl: (roomId, shift, date) => `${API_BASE}/export/room-grid?roomId=${roomId}&shift=${shift}&date=${date}&format=csv`,

@@ -31,9 +31,10 @@ export const importCSV = async (req, res) => {
       const roll = (row[rollIdx] || "").toString().trim();
       if (!roll) return null;
       const sem = (row[semIdx] || "").toString().trim();
+      const dept = (row[deptIdx] || "").toString().trim();
       const semNum = Number(sem);
       const shift = !isNaN(semNum) && semNum > 0 ? (semNum % 2 === 1 ? 1 : 2) : (sem.split('').reduce((h, c) => h + c.charCodeAt(0), 0) % 2 === 0 ? 1 : 2);
-      return { updateOne: { filter: { roll, orgCode: req.user.adminCode }, update: { $set: { roll, name: (row[nameIdx] || "").toString().trim(), dept: (row[deptIdx] || "").toString().trim(), sem, shift, examType, subject: (subjectIdx !== -1 && row[subjectIdx]) ? row[subjectIdx].toString().trim().split(/[,;|]+/).map(s => s.trim()).filter(Boolean) : [], metadata: metaFields.reduce((m, f) => { if (row[f.idx] !== undefined) m[f.label] = row[f.idx].toString().trim(); return m; }, {}), orgCode: req.user.adminCode } }, upsert: true } };
+      return { updateOne: { filter: { roll, sem, dept, orgCode: req.user.adminCode }, update: { $set: { roll, name: (row[nameIdx] || "").toString().trim(), dept, sem, shift, examType, subject: (subjectIdx !== -1 && row[subjectIdx]) ? row[subjectIdx].toString().trim().split(/[,;|]+/).map(s => s.trim()).filter(Boolean) : [], metadata: metaFields.reduce((m, f) => { if (row[f.idx] !== undefined) m[f.label] = row[f.idx].toString().trim(); return m; }, {}), orgCode: req.user.adminCode } }, upsert: true } };
     }).filter(Boolean);
     if (ops.length === 0) return res.status(400).json({ error: "no valid rows" });
     const resu = await Student.bulkWrite(ops);
@@ -81,7 +82,7 @@ export const addStudent = async (req, res) => {
   try {
     const { roll, name, dept, sem, subject, examType } = req.body;
     if (!roll || !sem) return res.status(400).json({ error: "roll+sem required" });
-    if (await Student.findOne({ roll, orgCode: req.user.adminCode })) return res.status(400).json({ error: "Exists" });
+    if (await Student.findOne({ roll, sem, dept, orgCode: req.user.adminCode })) return res.status(400).json({ error: "Exists" });
     const s = new Student({ roll, name, dept, sem, shift: getShift(sem), subject: Array.isArray(subject) ? subject : (subject ? [subject] : []), examType: examType || "College", orgCode: req.user.adminCode });
     await s.save();
     res.json(s);
@@ -91,10 +92,17 @@ export const addStudent = async (req, res) => {
 export const updateStudent = async (req, res) => {
   try {
     const { roll, name, dept, sem, subject, examType, metadata } = req.body;
-    if (await Student.findOne({ roll, orgCode: req.user.adminCode, _id: { $ne: req.params.id } })) return res.status(400).json({ error: "Exists" });
     
     const s = await Student.findOne({ _id: req.params.id, orgCode: req.user.adminCode });
     if (!s) return res.status(404).json({ error: "Not found" });
+
+    const rollCheck = roll !== undefined ? roll : s.roll;
+    const semCheck = sem !== undefined ? sem : s.sem;
+    const deptCheck = dept !== undefined ? dept : s.dept;
+    
+    if (await Student.findOne({ roll: rollCheck, sem: semCheck, dept: deptCheck, orgCode: req.user.adminCode, _id: { $ne: req.params.id } })) {
+      return res.status(400).json({ error: "Exists" });
+    }
 
     if (roll !== undefined) s.roll = roll;
     if (name !== undefined) s.name = name;

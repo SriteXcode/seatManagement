@@ -21,6 +21,8 @@ const AllotmentTab = React.lazy(() => import("./components/allotments/AllotmentT
 const StagingBucket = React.lazy(() => import("./components/allotments/StagingBucket"));
 const DistancingModal = React.lazy(() => import("./components/allotments/DistancingModal"));
 const ProfileTab = React.lazy(() => import("./components/profile/ProfileTab"));
+const FormBuilderTab = React.lazy(() => import("./components/students/FormBuilderTab"));
+const PublicRegistration = React.lazy(() => import("./components/students/PublicRegistration"));
 import LandingPage from "./components/landing/LandingPage";
 
 import ToastContainer from "./components/common/ToastContainer";
@@ -2519,6 +2521,55 @@ export default function App() {
     return authHeader(token);
   }, [token]);
 
+  // PUBLIC STUDENT REGISTRATION BYPASS
+  const pathname = window.location.pathname;
+  const searchParams = new URLSearchParams(window.location.search);
+  const isPathRegister = pathname.startsWith("/public/register/");
+  const isQueryRegister = searchParams.get("view") === "register";
+
+  if (isPathRegister || isQueryRegister) {
+    let routeOrgCode = "";
+    let routeExamType = "";
+    let routeFormId = "";
+    if (isPathRegister) {
+      const parts = pathname.split("/").filter(Boolean);
+      routeOrgCode = parts[2] || "";
+      const lastPart = parts[3] || "College";
+      if (lastPart.match(/^[0-9a-fA-F]{24}$/)) {
+        routeFormId = lastPart;
+      } else {
+        routeExamType = lastPart;
+      }
+    } else {
+      routeOrgCode = searchParams.get("orgCode") || "";
+      const val = searchParams.get("examType") || searchParams.get("formId") || "College";
+      if (val.match(/^[0-9a-fA-F]{24}$/)) {
+        routeFormId = val;
+      } else {
+        routeExamType = val;
+      }
+    }
+
+    return (
+      <React.Suspense fallback={
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="relative w-8 h-8">
+            <div className="absolute inset-0 rounded-full border-3 border-red-100 animate-pulse"></div>
+            <div className="absolute inset-0 rounded-full border-3 border-transparent border-t-red-700 animate-spin"></div>
+          </div>
+        </div>
+      }>
+        <PublicRegistration
+          orgCode={routeOrgCode}
+          formId={routeFormId}
+          examType={routeExamType}
+          showToast={showToast}
+        />
+        <ToastContainer toasts={toasts} />
+      </React.Suspense>
+    );
+  }
+
   // AUTH STATE RENDERING OVERRIDES
   if (!isLoggedIn) {
     return (
@@ -2866,6 +2917,15 @@ export default function App() {
             setSelectedExamType={setSelectedExamType}
             setActiveTab={setActiveTab}
             deleteFromLibrary={deleteFromLibrary}
+            showToast={showToast}
+          />
+        </div>
+
+        {/* TAB 6: FORM BUILDER */}
+        <div id="Form Builder">
+          <FormBuilderTab
+            token={token}
+            decoded={decoded}
             showToast={showToast}
           />
         </div>
