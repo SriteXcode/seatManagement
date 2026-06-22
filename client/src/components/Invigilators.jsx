@@ -71,6 +71,7 @@ const Invigilators = ({ token, invigilators, onAdd, onEdit, onDelete, onAssign, 
             if (Array.isArray(allotments) && allotments.length > 0) {
                 const distinctRooms = {};
                 allotments.forEach(a => {
+                    if (!a.room) return;
                     const rId = a.room._id || a.room;
                     const rName = a.room.name || "Unknown";
                     distinctRooms[rId] = rName;
