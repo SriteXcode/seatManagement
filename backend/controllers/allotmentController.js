@@ -4,29 +4,6 @@ import Student from "../models/Student.js";
 import InvigAssignment from "../models/InvigAssignment.js";
 import { generateAllotments as generateAlgo } from "../services/seatGenerator.js";
 
-const cleanupExpiredStudents = async (orgCode) => {
-  try {
-    const todayStr = new Date().toISOString().split("T")[0];
-    
-    const allAllottedStudentIds = await Allotment.find({ orgCode }).distinct("student");
-    if (allAllottedStudentIds.length === 0) return;
-
-    const activeStudentIds = await Allotment.find({
-      orgCode,
-      date: { $gte: todayStr }
-    }).distinct("student");
-    const activeSet = new Set(activeStudentIds.map(id => String(id)));
-
-    const toDeleteIds = allAllottedStudentIds.filter(id => !activeSet.has(String(id)));
-
-    if (toDeleteIds.length > 0) {
-      await Student.deleteMany({ _id: { $in: toDeleteIds }, orgCode });
-      await Allotment.deleteMany({ student: { $in: toDeleteIds }, orgCode });
-    }
-  } catch (error) {
-    console.error("Error cleaning up expired students:", error);
-  }
-};
 
 const cleanupDeletedStudents = async (studentIds, orgCode) => {
   try {
@@ -243,7 +220,6 @@ export const saveManual = async (req, res) => {
 };
 
 export const getAll = async (req, res) => {
-  await cleanupExpiredStudents(req.user.adminCode);
   const shift = Number(req.query.shift) || 1;
   const date = req.query.date;
   const roomId = req.query.roomId || null;
@@ -353,7 +329,6 @@ export const exportRoomGrid = async (req, res) => {
 
 export const getSchedules = async (req, res) => {
   try {
-    await cleanupExpiredStudents(req.user.adminCode);
     const allotments = await Allotment.find({ orgCode: req.user.adminCode }).populate("student").lean();
     const groups = {};
     for (const a of allotments) {

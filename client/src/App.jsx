@@ -68,7 +68,12 @@ export default function App() {
   const [distributors, setDistributors] = useState([]);
 
   // Generate / Filter Slots States
-  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(() => {
+    const localDate = new Date();
+    const offset = localDate.getTimezoneOffset();
+    const adjusted = new Date(localDate.getTime() - (offset * 60000));
+    return adjusted.toISOString().split('T')[0];
+  });
   const [time, setTime] = useState("10:00");
   const [subject, setSubject] = useState("");
   const [shift, setShift] = useState(1);
