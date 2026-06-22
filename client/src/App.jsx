@@ -18,7 +18,7 @@ const StudentsTab = React.lazy(() => import("./components/students/StudentsTab")
 const StudentModal = React.lazy(() => import("./components/students/StudentModal"));
 const RoomsTab = React.lazy(() => import("./components/rooms/RoomsTab"));
 const AllotmentTab = React.lazy(() => import("./components/allotments/AllotmentTab"));
-const StagingBucket = React.lazy(() => import("./components/allotments/StagingBucket"));
+// StagingBucket import is removed.
 const DistancingModal = React.lazy(() => import("./components/allotments/DistancingModal"));
 const ProfileTab = React.lazy(() => import("./components/profile/ProfileTab"));
 const FormBuilderTab = React.lazy(() => import("./components/students/FormBuilderTab"));
@@ -650,32 +650,7 @@ export default function App() {
     }
   }
 
-  // Keep staging bucket in sync with allStudents and allotments universally
-  useEffect(() => {
-    if (!token || userRole === "superadmin") return;
-    if (isLayoutSettingsLocked) return;
 
-    const placedStudentIds = new Set((allotments || []).map(a => a.student?._id).filter(Boolean));
-    const unplaced = (allStudents || []).filter(
-      s => s.examType === selectedExamType && !placedStudentIds.has(s._id)
-    );
-
-    setBucket(prev => {
-      const previousSeatMap = new Map();
-      prev.forEach(s => {
-        if (s.previousSeat) {
-          previousSeatMap.set(s._id, s.previousSeat);
-        }
-      });
-
-      return unplaced.map(s => {
-        if (previousSeatMap.has(s._id)) {
-          return { ...s, previousSeat: previousSeatMap.get(s._id) };
-        }
-        return s;
-      });
-    });
-  }, [allStudents, allotments, selectedExamType, token, userRole, isLayoutSettingsLocked]);
 
   async function saveManualAllotments(updatedAllotments, currentBucket = bucket) {
     setIsSaving(true);
@@ -1104,8 +1079,8 @@ export default function App() {
       };
       const updatedAllotments = allotments.filter((_, idx) => idx !== sourceIndex);
       setAllotments(updatedAllotments);
-      setBucket(prev => [...prev, updatedStudent]);
-      showToast(`Unallotted ${student.roll} to bucket`, "success");
+      setBucket([]);
+      showToast(`Unallotted ${student.roll}`, "success");
       saveManualAllotments(updatedAllotments);
 
       api.updateStudent(student._id, {
@@ -1205,7 +1180,7 @@ export default function App() {
           isOpen: true,
           type: "confirm",
           title: "Seat Options (Phone)",
-          message: `Would you like to unallocate ${student.roll} (move to staging bucket)?\n\nClick 'Confirm' to unallocate, or 'Cancel' to select the student for reallocation.`,
+          message: `Would you like to unallocate ${student.roll}?\n\nClick 'Confirm' to unallocate, or 'Cancel' to select the student for reallocation.`,
           onConfirm: () => {
             executeUnallot(roomId, row, col);
             closeDialog();
@@ -3128,35 +3103,7 @@ export default function App() {
 
       {/* Floating Staging Bucket Sidebar */}
       <React.Suspense fallback={null}>
-        <StagingBucket
-          isLoggedIn={isLoggedIn && activeTab === "Allotment"}
-          showBucketSidebar={showBucketSidebar}
-          setShowBucketSidebar={setShowBucketSidebar}
-          bucket={bucket}
-          searchRoll={searchRoll}
-          setSearchRoll={setSearchRoll}
-          handleSearchStudent={handleSearchStudent}
-          isSearching={isSearching}
-          bucketFilterKey={bucketFilterKey}
-          setBucketFilterKey={setBucketFilterKey}
-          bucketFilterVal={bucketFilterVal}
-          setBucketFilterVal={setBucketFilterVal}
-          uniqueBucketValues={uniqueBucketValues}
-          bucketFilter={bucketFilter}
-          setBucketFilter={setBucketFilter}
-          dragOverBucket={dragOverBucket}
-          setDragOverBucket={setDragOverBucket}
-          handleDragStartBucket={handleDragStartBucket}
-          setIsDraggingStudent={setIsDraggingStudent}
-          handleDropOnBucket={handleDropOnBucket}
-          userRole={userRole}
-          getFieldLabel={getFieldLabel}
-          selectedStudentForMove={selectedStudentForMove}
-          handleTapStudent={handleTapStudent}
-          handleTapBucket={handleTapBucket}
-          handleAssignClick={handleAssignClick}
-          handleClearBucket={handleClearBucket}
-        />
+        {/* Staging Bucket component is removed. */}
 
         {/* Spacing Layout Settings Dialog */}
         <DistancingModal

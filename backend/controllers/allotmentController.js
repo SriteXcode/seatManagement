@@ -116,34 +116,9 @@ export const generate = async (req, res) => {
       };
     });
 
-    if (Array.isArray(notPlaced) && notPlaced.length > 0) {
-      for (const student of notPlaced) {
-        const matchingCombo = deptSemCombinations.find(combo => combo.dept === student.dept && String(combo.sem) === String(student.sem));
-        const allotmentSubject = (matchingCombo ? matchingCombo.subject : "") || (Array.isArray(student.subject) ? student.subject[0] : student.subject) || "";
-        docs.push({
-          student: student._id,
-          room: null,
-          row: null,
-          col: null,
-          seatCode: "",
-          shift: Number(shift),
-          date,
-          time: time || "",
-          subject: allotmentSubject,
-          seatLabel: "Staging Bucket",
-          useDistancing: Boolean(useDistancing),
-          rowGrouping: Number(rowGrouping) || 0,
-          colGrouping: Number(colGrouping) || 0,
-          gapType: gapType || "",
-          gapAction: gapAction || "",
-          orgCode: req.user.adminCode
-        });
-      }
-    }
-
     if (docs.length) await Allotment.insertMany(docs);
     console.log(`[Backend Generate] Inserted allotments count:`, docs.length);
-    res.json({ ok: true, count: docs.length, notPlaced });
+    res.json({ ok: true, count: docs.length, notPlaced: [] });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -193,8 +168,9 @@ export const saveManual = async (req, res) => {
     
     await Allotment.deleteMany({ shift: Number(shift), date, orgCode: req.user.adminCode });
     
-    if (Array.isArray(allotments) && allotments.length > 0) {
-      const docs = allotments.map(a => {
+    const placedAllotments = (allotments || []).filter(a => a.room);
+    if (placedAllotments.length > 0) {
+      const docs = placedAllotments.map(a => {
         const student = a.student ? (a.student._id || a.student) : null;
         const room = a.room ? (a.room._id || a.room) : null;
         const roomName = (a.room && a.room.name) || "Staging Bucket";
