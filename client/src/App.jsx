@@ -123,6 +123,7 @@ export default function App() {
 
   // Staging bucket & rearrangement
   const [bucket, setBucket] = useState([]);
+  const [dutyChartTrigger, setDutyChartTrigger] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [searchRoll, setSearchRoll] = useState("");
   const [isSearching, setIsSearching] = useState(false);
@@ -440,6 +441,7 @@ export default function App() {
         }
         triggerAlert("Assignment Process Completed", msg);
         fetchInvigAssignments();
+        setDutyChartTrigger(prev => prev + 1);
       }
     );
   }
@@ -2281,6 +2283,7 @@ export default function App() {
         setDeptSemCombinations([]);
         setIsLayoutSettingsLocked(false);
         fetchSchedules();
+        setDutyChartTrigger(prev => prev + 1);
       } else {
         showToast(res.error || "Failed to delete schedule.", "error");
       }
@@ -2990,7 +2993,7 @@ export default function App() {
           <section className="bg-white shadow rounded-lg p-6 mt-6 border border-gray-150 animate-fadeIn">
             <h3 className="text-md font-semibold text-red-700">Duty Chart</h3>
             <div className="mt-3">
-              <DutyChart token={token} />
+              <DutyChart token={token} trigger={dutyChartTrigger} />
             </div>
           </section>
         </div>

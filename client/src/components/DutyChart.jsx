@@ -6,7 +6,7 @@ function authHeader(token) {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-export default function DutyChart({ token }) {
+export default function DutyChart({ token, trigger }) {
   const [schedules, setSchedules] = useState([]);
   const [invigilators, setInvigilators] = useState([]);
   const [assignmentsMap, setAssignmentsMap] = useState({});
@@ -17,7 +17,7 @@ export default function DutyChart({ token }) {
     if (token) {
       loadData();
     }
-  }, [token]);
+  }, [token, trigger]);
 
   async function loadData() {
     setLoading(true);
