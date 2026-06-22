@@ -176,6 +176,7 @@ const Invigilators = ({ token, invigilators, onAdd, onEdit, onDelete, onAssign, 
     }
 
     const grouped = {};
+    const dateGroups = {};
 
     selectedOptionIds.forEach(optId => {
         const opt = availableOptions.find(o => o.id === optId);
@@ -187,13 +188,30 @@ const Invigilators = ({ token, invigilators, onAdd, onEdit, onDelete, onAssign, 
             if (!grouped[key].roomIds.includes(opt.roomId)) {
                 grouped[key].roomIds.push(opt.roomId);
             }
+
+            if (!dateGroups[opt.date]) {
+                dateGroups[opt.date] = {
+                    roomsCount: 0,
+                    shifts: new Set()
+                };
+            }
+            dateGroups[opt.date].roomsCount += 1;
+            dateGroups[opt.date].shifts.add(opt.shift);
         }
     });
 
     const targetSchedules = Object.values(grouped);
-
     const totalRoomsCount = selectedOptionIds.length;
-    const requiredInvigilators = totalRoomsCount * invigilatorsPerRoom + (distributors * targetSchedules.length);
+
+    // Calculate maximum required invigilators on any single date
+    let requiredInvigilators = 0;
+    Object.keys(dateGroups).forEach(date => {
+        const group = dateGroups[date];
+        const reqForDate = group.roomsCount * invigilatorsPerRoom + (distributors * group.shifts.size);
+        if (reqForDate > requiredInvigilators) {
+            requiredInvigilators = reqForDate;
+        }
+    });
     
     if (invigilators.length < requiredInvigilators) {
       if (triggerConfirm) {
