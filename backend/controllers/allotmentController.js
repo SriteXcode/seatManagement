@@ -77,6 +77,9 @@ export const generate = async (req, res) => {
     };
     
     let students = await Student.find(query).lean();
+    console.log(`[Backend Generate] Query details:`, JSON.stringify(query));
+    console.log(`[Backend Generate] Found students count:`, students.length);
+    console.log(`[Backend Generate] Found rooms count:`, rooms.length);
     if (Array.isArray(excludeStudentIds) && excludeStudentIds.length > 0) {
       const excludeSet = new Set(excludeStudentIds.map(String));
       students = students.filter(s => !excludeSet.has(String(s._id)));
@@ -99,6 +102,7 @@ export const generate = async (req, res) => {
       rowGrouping: Number(rowGrouping) || 0,
       colGrouping: Number(colGrouping) || 0
     });
+    console.log(`[Backend Generate] Algo output - allotments: ${generatedAllotments.length}, notPlaced: ${notPlaced.length}`);
 
     const docs = generatedAllotments.map(a => {
       const matchingCombo = deptSemCombinations.find(combo => combo.dept === a.student.dept && String(combo.sem) === String(a.student.sem));
@@ -138,6 +142,7 @@ export const generate = async (req, res) => {
     }
 
     if (docs.length) await Allotment.insertMany(docs);
+    console.log(`[Backend Generate] Inserted allotments count:`, docs.length);
     res.json({ ok: true, count: docs.length, notPlaced });
   } catch (e) {
     res.status(500).json({ error: e.message });

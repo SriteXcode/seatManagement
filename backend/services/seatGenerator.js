@@ -65,9 +65,11 @@ function shareAnySubject(st, nb) {
  * Returns { allotments: [{student, room, row, col, seatCode}], notPlaced: [studentRoll...] }
  */
 export function generateAllotments({ students = [], rooms = [], shift = 1, seed = 1, occupied = [], useDistancing = false, rowGrouping = 0, colGrouping = 0 }) {
+  console.log(`[Algo Exec] students param count: ${students ? students.length : 'undefined'}`);
   const target = students;
 
   const shuffled = shuffleArray(target, seed);
+  console.log(`[Algo Exec] shuffled count: ${shuffled ? shuffled.length : 'undefined'}`);
   const used = new Set();
   const result = [];
 

@@ -2263,15 +2263,8 @@ export default function App() {
         }
       );
     } else {
-      if (bucket.length > 0) {
-        triggerGenerationConfirm(
-          "Staging Bucket Students Available",
-          `You have ${bucket.length} students in the staging bucket. Generate layout including these unallotted students?`,
-          (includeBucket) => action(includeBucket)
-        );
-      } else {
-        action(true);
-      }
+      // Starting fresh: no need to ask about staging bucket since there is no previous layout
+      action(true);
     }
   }
 
