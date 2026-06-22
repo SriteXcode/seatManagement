@@ -286,6 +286,16 @@ export default function DutyChart({ token, trigger }) {
       return 'text-gray-300';
     };
 
+    const getDropdownClass = (valueRole) => {
+      if (valueRole === 'distributor') {
+        return 'text-purple-700 bg-purple-50 border-purple-250 font-extrabold focus:ring-purple-500/20 focus:border-purple-500';
+      }
+      if (valueRole === 'room') {
+        return 'text-red-700 bg-red-50/30 border-red-200 font-bold focus:ring-red-500/20 focus:border-red-500';
+      }
+      return 'text-gray-400 font-medium border-gray-250 focus:ring-gray-300/20 focus:border-gray-400';
+    };
+
     if (!isEditMode) {
       return (
         <td className={`border border-gray-300 px-2 py-2 text-center ${getCellClass(val.roomName)}`}>
@@ -312,12 +322,12 @@ export default function DutyChart({ token, trigger }) {
           <select
             value={val.role === 'room' ? (val.roomId || '') : val.role}
             onChange={(e) => handleSelectChange(inv._id, key, e.target.value)}
-            className="bg-white border border-gray-250 rounded-lg py-1 px-1 text-[11px] font-bold text-gray-700 shadow-4xs focus:outline-none focus:ring-1 focus:ring-red-500/20 focus:border-red-500 min-w-[90px] max-w-[130px] cursor-pointer"
+            className={`appearance-none bg-no-repeat bg-[right_0.375rem_center] bg-[length:0.75rem_0.75rem] bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22currentColor%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] border rounded-lg py-1 pl-2 pr-6 text-[11px] shadow-4xs focus:outline-none focus:ring-1 min-w-[100px] max-w-[140px] cursor-pointer transition-all duration-150 ${getDropdownClass(val.role)}`}
           >
-            <option value="none">- (None)</option>
-            <option value="distributor">Distributor</option>
+            <option value="none" className="text-gray-400 font-medium bg-white">- (None)</option>
+            <option value="distributor" className="text-purple-700 font-bold bg-white">Distributor</option>
             {activeRooms.map(room => (
-              <option key={room._id} value={room._id}>
+              <option key={room._id} value={room._id} className="text-red-700 font-bold bg-white">
                 {room.name}
               </option>
             ))}
