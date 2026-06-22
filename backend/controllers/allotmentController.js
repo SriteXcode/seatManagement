@@ -227,7 +227,15 @@ export const getAll = async (req, res) => {
   if (date) q.date = date;
   if (roomId) q.room = roomId;
   const data = await Allotment.find(q).populate("student").populate("room").lean();
-  res.json(data);
+  
+  // Auto-heal: delete allotments that don't have a valid student populated
+  const orphanIds = data.filter(a => !a.student).map(a => a._id);
+  if (orphanIds.length > 0) {
+    await Allotment.deleteMany({ _id: { $in: orphanIds } });
+  }
+
+  const validData = data.filter(a => a.student);
+  res.json(validData);
 };
 
 import PDFDocument from "pdfkit";
@@ -330,8 +338,16 @@ export const exportRoomGrid = async (req, res) => {
 export const getSchedules = async (req, res) => {
   try {
     const allotments = await Allotment.find({ orgCode: req.user.adminCode }).populate("student").lean();
+    
+    // Auto-heal: delete allotments that don't have a valid student populated
+    const orphanIds = allotments.filter(a => !a.student).map(a => a._id);
+    if (orphanIds.length > 0) {
+      await Allotment.deleteMany({ _id: { $in: orphanIds } });
+    }
+
+    const validAllotments = allotments.filter(a => a.student);
     const groups = {};
-    for (const a of allotments) {
+    for (const a of validAllotments) {
       if (!a.date || !a.shift) continue;
       const key = `${a.date}_${a.shift}`;
       if (!groups[key]) {
@@ -340,21 +356,19 @@ export const getSchedules = async (req, res) => {
       const g = groups[key];
       if (a.time) g.times.add(a.time);
       if (a.subject) g.subjects.add(a.subject);
-      if (a.student) {
-        const s = a.student;
-        g.examTypes.add(s.examType || "College");
-        if (s.dept) g.depts.add(s.dept);
-        if (s.sem) g.sems.add(String(s.sem));
-        const comboKey = `${s.dept || ""}_${s.sem || ""}_${a.subject || ""}`;
-        if (!g.combinationKeys.has(comboKey)) {
-          g.combinationKeys.add(comboKey);
-          g.combinations.push({ dept: s.dept || "", sem: String(s.sem || ""), subject: a.subject || "" });
-        }
-        if (s.metadata) {
-          for (const [k, v] of Object.entries(s.metadata)) {
-            const kl = k.toLowerCase();
-            if (["section", "sec", "stream", "class", "division", "div"].includes(kl) && v) g.sections.add(String(v));
-          }
+      const s = a.student;
+      g.examTypes.add(s.examType || "College");
+      if (s.dept) g.depts.add(s.dept);
+      if (s.sem) g.sems.add(String(s.sem));
+      const comboKey = `${s.dept || ""}_${s.sem || ""}_${a.subject || ""}`;
+      if (!g.combinationKeys.has(comboKey)) {
+        g.combinationKeys.add(comboKey);
+        g.combinations.push({ dept: s.dept || "", sem: String(s.sem || ""), subject: a.subject || "" });
+      }
+      if (s.metadata) {
+        for (const [k, v] of Object.entries(s.metadata)) {
+          const kl = k.toLowerCase();
+          if (["section", "sec", "stream", "class", "division", "div"].includes(kl) && v) g.sections.add(String(v));
         }
       }
     }

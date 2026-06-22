@@ -163,7 +163,7 @@ export function generateAllotments({ students = [], rooms = [], shift = 1, seed 
     }
   }
 
-  const notPlaced = shuffled.filter(s => !used.has(String(s._id))).map(s => s.roll);
+  const notPlaced = shuffled.filter(s => !used.has(String(s._id)));
   return { allotments: result, notPlaced };
 }
 
