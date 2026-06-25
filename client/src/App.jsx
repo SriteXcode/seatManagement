@@ -2977,6 +2977,7 @@ export default function App() {
             triggerConfirm={triggerConfirm}
             showToast={showToast}
             userRole={userRole}
+            setDialog={setDialog}
           />
           {distributors.length > 0 && (
             <section className="bg-white shadow rounded-lg p-6 mt-6 border border-gray-150 animate-fadeIn">

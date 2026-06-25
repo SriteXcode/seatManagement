@@ -3,6 +3,7 @@ import FormConfig from "../models/FormConfig.js";
 import ExamConfig from "../models/ExamConfig.js";
 import Student from "../models/Student.js";
 import User from "../models/User.js";
+import Invigilator from "../models/Invigilator.js";
 
 const getShift = (sem) => {
   if (!sem) return 1;
@@ -12,9 +13,24 @@ const getShift = (sem) => {
     : (sem.split('').reduce((h, c) => h + c.charCodeAt(0), 0) % 2 === 0 ? 1 : 2);
 };
 
+const getOrgCode = async (req) => {
+  let code = req.user?.adminCode;
+  if (!code) {
+    const u = await User.findById(req.user?.id);
+    if (u) {
+      code = u.role === "admin" ? u.adminCode : u.staffCode;
+      if (!code && u.role === "admin") {
+        code = Math.floor(100000 + Math.random() * 900000).toString();
+        await User.updateOne({ _id: u._id }, { adminCode: code });
+      }
+    }
+  }
+  return code || "100000";
+};
+
 export const getFormConfig = async (req, res) => {
   try {
-    const orgCode = req.user.adminCode;
+    const orgCode = await getOrgCode(req);
     const { examType } = req.params;
 
     if (!examType) {
@@ -54,6 +70,14 @@ export const getFormConfig = async (req, res) => {
             { key: "dept", label: "Stream", required: true, visible: true, placeholder: "e.g. Engineering", formatHelp: "" },
             { key: "sem", label: "Subject", required: true, visible: true, placeholder: "e.g. Physics", formatHelp: "" }
           ];
+        } else if (examType === "Invigilator") {
+          fields = [
+            { key: "name", label: "Full Name", required: true, visible: true, placeholder: "e.g. John Doe", formatHelp: "" },
+            { key: "empId", label: "Employee ID", required: true, visible: true, placeholder: "e.g. EMP-101", formatHelp: "Unique ID" },
+            { key: "dept", label: "Department", required: false, visible: true, placeholder: "e.g. Computer Science", formatHelp: "" },
+            { key: "phone", label: "Phone", required: false, visible: true, placeholder: "e.g. +91 9876543210", formatHelp: "" },
+            { key: "email", label: "Email Address", required: false, visible: true, placeholder: "e.g. professor@college.edu", formatHelp: "" }
+          ];
         } else {
           // College Default
           fields = [
@@ -69,8 +93,8 @@ export const getFormConfig = async (req, res) => {
       config = {
         orgCode,
         examType,
-        title: `${examType} Registration Form`,
-        description: `Please fill out this form to register your details for the upcoming ${examType} exams.`,
+        title: examType === "Invigilator" ? "Invigilator Registration Form" : `${examType} Registration Form`,
+        description: examType === "Invigilator" ? "Please fill out this form to register your details as an invigilator." : `Please fill out this form to register your details for the upcoming ${examType} exams.`,
         isActive: false,
         dueDate: null,
         fields
@@ -85,7 +109,7 @@ export const getFormConfig = async (req, res) => {
 
 export const saveFormConfig = async (req, res) => {
   try {
-    const orgCode = req.user.adminCode;
+    const orgCode = await getOrgCode(req);
     const { examType } = req.params;
     const { title, description, isActive, fields, dueDate } = req.body;
 
@@ -173,6 +197,44 @@ export const registerStudentPublic = async (req, res) => {
       }
     }
 
+    // Special check for Invigilator registration
+    if (examType === "Invigilator") {
+      const empId = (studentData.empId || "").toString().trim();
+      if (!empId) {
+        return res.status(400).json({ error: "Employee ID is required." });
+      }
+      const name = (studentData.name || "").toString().trim();
+      const dept = (studentData.dept || "").toString().trim();
+      const phone = (studentData.phone || "").toString().trim();
+      const email = (studentData.email || "").toString().trim();
+
+      const existing = await Invigilator.findOne({ empId, orgCode });
+      if (existing) {
+        return res.status(400).json({ error: "An invigilator with this Employee ID is already registered." });
+      }
+
+      const newInv = new Invigilator({
+        name,
+        empId,
+        dept,
+        phone,
+        email,
+        orgCode
+      });
+      await newInv.save();
+
+      return res.status(201).json({
+        success: true,
+        message: "Invigilator registered successfully!",
+        invigilator: {
+          id: newInv._id,
+          empId: newInv.empId,
+          name: newInv.name,
+          dept: newInv.dept
+        }
+      });
+    }
+
     // 3. Roll number duplicate check inside this organization
     const roll = (studentData.roll || "").toString().trim();
     if (!roll) {
@@ -239,7 +301,7 @@ export const registerStudentPublic = async (req, res) => {
 
 export const listFormConfigs = async (req, res) => {
   try {
-    const orgCode = req.user.adminCode;
+    const orgCode = await getOrgCode(req);
     const configs = await FormConfig.find({ orgCode }).lean();
     res.json(configs);
   } catch (e) {
@@ -249,7 +311,7 @@ export const listFormConfigs = async (req, res) => {
 
 export const saveFormConfigById = async (req, res) => {
   try {
-    const orgCode = req.user.adminCode;
+    const orgCode = await getOrgCode(req);
     const { _id, examType, title, description, isActive, fields, dueDate } = req.body;
 
     if (!examType) {
@@ -289,7 +351,7 @@ export const saveFormConfigById = async (req, res) => {
 
 export const deleteFormConfigById = async (req, res) => {
   try {
-    const orgCode = req.user.adminCode;
+    const orgCode = await getOrgCode(req);
     const { id } = req.params;
     const result = await FormConfig.findOneAndDelete({ _id: id, orgCode });
     if (!result) return res.status(404).json({ error: "Form not found" });
@@ -352,6 +414,43 @@ export const registerStudentPublicById = async (req, res) => {
       if (f.required && (studentData[f.key] === undefined || studentData[f.key] === null || studentData[f.key].toString().trim() === "")) {
         return res.status(400).json({ error: `${f.label} is required.` });
       }
+    }
+
+    if (config.examType === "Invigilator") {
+      const empId = (studentData.empId || "").toString().trim();
+      if (!empId) {
+        return res.status(400).json({ error: "Employee ID is required." });
+      }
+      const name = (studentData.name || "").toString().trim();
+      const dept = (studentData.dept || "").toString().trim();
+      const phone = (studentData.phone || "").toString().trim();
+      const email = (studentData.email || "").toString().trim();
+
+      const existing = await Invigilator.findOne({ empId, orgCode });
+      if (existing) {
+        return res.status(400).json({ error: "An invigilator with this Employee ID is already registered." });
+      }
+
+      const newInv = new Invigilator({
+        name,
+        empId,
+        dept,
+        phone,
+        email,
+        orgCode
+      });
+      await newInv.save();
+
+      return res.status(201).json({
+        success: true,
+        message: "Invigilator registered successfully!",
+        invigilator: {
+          id: newInv._id,
+          empId: newInv.empId,
+          name: newInv.name,
+          dept: newInv.dept
+        }
+      });
     }
 
     const roll = (studentData.roll || "").toString().trim();

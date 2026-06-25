@@ -34,12 +34,12 @@ export default function CustomDialog({ dialog, bucketLength, onClose }) {
 
           {dialog.type === 'import-conflict' && (
             <div className="mt-3 p-3.5 bg-red-50/50 border border-red-100 rounded-xl text-xs text-gray-700 leading-relaxed space-y-2 select-none">
-              <p className="font-bold text-red-800">Duplicate Roll Numbers Detected</p>
-              <p>We found matching student roll numbers already saved under this exam type in the database.</p>
+              <p className="font-bold text-red-800">Duplicate {dialog.conflictEntity === 'invigilator' ? 'Employee IDs' : 'Roll Numbers'} Detected</p>
+              <p>We found matching {dialog.conflictEntity === 'invigilator' ? 'invigilator employee IDs' : 'student roll numbers'} already saved in the database.</p>
               <p className="font-semibold text-gray-800">Please choose one of the following resolution strategies:</p>
               <ul className="list-disc pl-4 space-y-1 text-[11px] text-gray-600 font-semibold">
-                <li><strong className="text-gray-800">Overwrite & Merge:</strong> Overwrites only the duplicate entries, keeping other existing students intact.</li>
-                <li><strong className="text-gray-800">Clear & Re-import:</strong> Deletes all existing students under this exam format first, performing a completely clean import.</li>
+                <li><strong className="text-gray-800">Overwrite & Merge:</strong> Overwrites only the duplicate entries, keeping other existing {dialog.conflictEntity === 'invigilator' ? 'invigilators' : 'students'} intact.</li>
+                <li><strong className="text-gray-800">Clear & Re-import:</strong> Deletes all existing {dialog.conflictEntity === 'invigilator' ? 'invigilators' : 'students'} first, performing a completely clean import.</li>
               </ul>
             </div>
           )}

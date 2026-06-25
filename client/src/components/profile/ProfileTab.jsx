@@ -93,11 +93,20 @@ export default function ProfileTab({
                 <p className="text-xs text-gray-500 font-medium">
                   {userRole === "admin" ? "Administrator Profile" : "Staff Profile"}
                 </p>
-                {decoded?.adminCode && (
+                {userRole === "admin" ? (
+                  decoded?.adminCode && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-red-750 uppercase tracking-wider">Unique Org Code (Invite):</span>
+                      <span className="text-xs bg-red-50 text-red-750 font-bold px-2.5 py-1 rounded-lg border border-red-100 font-mono tracking-wider">
+                        {decoded.adminCode}
+                      </span>
+                    </div>
+                  )
+                ) : (
                   <div className="mt-2 flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-red-750 uppercase tracking-wider">Unique Org Code (Invite):</span>
+                    <span className="text-[10px] font-bold text-red-750 uppercase tracking-wider">Org Code:</span>
                     <span className="text-xs bg-red-50 text-red-750 font-bold px-2.5 py-1 rounded-lg border border-red-100 font-mono tracking-wider">
-                      {decoded.adminCode}
+                      {decoded?.adminCode || "(Ask Org Code from Admin)"}
                     </span>
                   </div>
                 )}

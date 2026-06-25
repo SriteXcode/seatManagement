@@ -34,6 +34,14 @@ export default function FormBuilderTab({ token, decoded, showToast }) {
         { key: "dept", label: "Stream", required: true, visible: true, placeholder: "e.g. Engineering", formatHelp: "" },
         { key: "sem", label: "Subject", required: true, visible: true, placeholder: "e.g. Physics", formatHelp: "" }
       ];
+    } else if (examType === "Invigilator") {
+      return [
+        { key: "name", label: "Full Name", required: true, visible: true, placeholder: "e.g. John Doe", formatHelp: "" },
+        { key: "empId", label: "Employee ID", required: true, visible: true, placeholder: "e.g. EMP-101", formatHelp: "Unique ID" },
+        { key: "dept", label: "Department", required: false, visible: true, placeholder: "e.g. Computer Science", formatHelp: "" },
+        { key: "phone", label: "Phone", required: false, visible: true, placeholder: "e.g. +91 9876543210", formatHelp: "" },
+        { key: "email", label: "Email Address", required: false, visible: true, placeholder: "e.g. professor@college.edu", formatHelp: "" }
+      ];
     } else {
       return [
         { key: "roll", label: "Roll No", required: true, visible: true, placeholder: "e.g. 2023-CS-101", formatHelp: "Format: YYYY-DEPT-ID" },
@@ -225,7 +233,7 @@ export default function FormBuilderTab({ token, decoded, showToast }) {
   };
 
   const isCriticalField = (key) => {
-    return key === "roll" || key === "sem";
+    return key === "roll" || key === "sem" || key === "empId" || key === "name";
   };
 
   return (
@@ -235,8 +243,8 @@ export default function FormBuilderTab({ token, decoded, showToast }) {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h2 className="text-lg font-extrabold text-gray-905">Self-Registration Link & Form Builder</h2>
-            <p className="text-xs text-gray-505 font-semibold mt-0.5">
-              Configure multiple custom registration forms and share links or QR codes for students.
+            <p className="text-xs text-gray-555 font-semibold mt-0.5 font-sans">
+              Configure multiple custom registration forms and share links or QR codes for students or invigilators.
             </p>
           </div>
 
@@ -255,6 +263,7 @@ export default function FormBuilderTab({ token, decoded, showToast }) {
                 <option value="College">College</option>
                 <option value="School">School</option>
                 <option value="Competitive">Competitive</option>
+                <option value="Invigilator">Invigilator</option>
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
               </div>
@@ -420,7 +429,7 @@ export default function FormBuilderTab({ token, decoded, showToast }) {
                       rows="3"
                       value={formConfig.description}
                       onChange={(e) => setFormConfig(prev => ({ ...prev, description: e.target.value }))}
-                      placeholder="Instructions shown to students at the top of the form..."
+                      placeholder={selectedExamType === "Invigilator" ? "Instructions shown to staff at the top of the form..." : "Instructions shown to students at the top of the form..."}
                       className="w-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg px-3 py-2 text-xs bg-white font-medium text-black shadow-3xs"
                     />
                   </div>

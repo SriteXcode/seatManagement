@@ -26,7 +26,7 @@ const getAvatarBg = (name) => {
   return colors[hash % colors.length];
 };
 
-const Invigilators = ({ token, invigilators, onAdd, onEdit, onDelete, onAssign, onRefresh, triggerConfirm, showToast, userRole = 'admin' }) => {
+const Invigilators = ({ token, invigilators, onAdd, onEdit, onDelete, onAssign, onRefresh, triggerConfirm, showToast, userRole = 'admin', setDialog }) => {
   const [newInvigilator, setNewInvigilator] = useState({
     name: '',
     empId: '',
@@ -36,6 +36,373 @@ const Invigilators = ({ token, invigilators, onAdd, onEdit, onDelete, onAssign, 
   });
   const [editingInvigilatorId, setEditingInvigilatorId] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [parsedCount, setParsedCount] = useState(0);
+  const [parsedCsvText, setParsedCsvText] = useState("");
+  const [showManualPaste, setShowManualPaste] = useState(false);
+  const [csvText, setCsvText] = useState("");
+  const [loading, setLoading] = useState(false);
+  const fileInputRef = React.useRef(null);
+
+  const downloadTemplate = async (format = "xlsx") => {
+    const headers = ["Full Name", "Employee ID", "Department", "Phone", "Email"];
+    const sampleRow = {
+      "Full Name": "John Doe",
+      "Employee ID": "EMP-101",
+      "Department": "Computer Science",
+      "Phone": "+91 9876543210",
+      "Email": "professor@college.edu"
+    };
+
+    if (format === "csv") {
+      const csvContent = [
+        headers.join(","),
+        headers.map(h => `"${sampleRow[h]}"`).join(",")
+      ].join("\n");
+      
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `invigilator_template.csv`;
+      a.click();
+    } else {
+      const XLSX = await import("xlsx");
+      const ws = XLSX.utils.json_to_sheet([sampleRow], { header: headers });
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Template");
+      XLSX.writeFile(wb, `invigilator_template.xlsx`);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      processFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      processFile(e.target.files[0]);
+    }
+  };
+
+  const clearSelectedFile = () => {
+    setSelectedFile(null);
+    setParsedCount(0);
+    setParsedCsvText("");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const mapColumnsToGeneric = (sheetRows) => {
+    if (sheetRows.length === 0) return "";
+    
+    const uploadedHeaders = sheetRows[0].map(h => (h || "").toString().trim().toLowerCase());
+    const mappedRows = [];
+
+    const nameIdx = uploadedHeaders.findIndex(h => ["name", "full name", "invigilator name", "staff name"].includes(h));
+    const empIdIdx = uploadedHeaders.findIndex(h => ["employee id", "empid", "emp id", "id"].includes(h));
+    const deptIdx = uploadedHeaders.findIndex(h => ["department", "dept"].includes(h));
+    const phoneIdx = uploadedHeaders.findIndex(h => ["phone", "phone number", "mobile", "contact"].includes(h));
+    const emailIdx = uploadedHeaders.findIndex(h => ["email", "email address"].includes(h));
+
+    if (nameIdx === -1 || empIdIdx === -1) {
+      const missing = [];
+      if (nameIdx === -1) missing.push('"Full Name"');
+      if (empIdIdx === -1) missing.push('"Employee ID"');
+      
+      const errMsg = `The uploaded template is missing one or more required column headers: ${missing.join(" and ")}.\n\nHeaders Found in Your Upload:\n${uploadedHeaders.length > 0 ? uploadedHeaders.map(h => `• ${h}`).join("\n") : "• (No headers found)"}`;
+      
+      if (showToast) {
+        showToast(`Missing required columns: ${missing.join(" and ")}`, "error");
+      } else {
+        alert(errMsg);
+      }
+      return null;
+    }
+
+    const outputHeaders = ["name", "empId", "dept", "phone", "email"];
+    mappedRows.push(outputHeaders.join(","));
+
+    for (let r = 1; r < sheetRows.length; r++) {
+      const row = sheetRows[r];
+      if (row.length === 0 || (row.length === 1 && !row[0])) continue;
+
+      const getVal = (idx) => {
+        if (idx === -1) return "";
+        return row[idx] !== undefined ? row[idx].toString().replace(/"/g, '""').trim() : "";
+      };
+
+      const name = getVal(nameIdx);
+      const empId = getVal(empIdIdx);
+      const dept = getVal(deptIdx);
+      const phone = getVal(phoneIdx);
+      const email = getVal(emailIdx);
+
+      if (!name && !empId) continue;
+
+      const values = [
+        `"${name}"`,
+        `"${empId}"`,
+        `"${dept}"`,
+        `"${phone}"`,
+        `"${email}"`
+      ];
+      mappedRows.push(values.join(","));
+    }
+
+    return mappedRows.join("\n");
+  };
+
+  const processFile = (file) => {
+    const validExtensions = [".csv", ".xlsx", ".xls"];
+    const fileExtension = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
+    
+    if (!validExtensions.includes(fileExtension)) {
+      if (showToast) {
+        showToast("Unsupported format! Upload CSV or Excel.", "error");
+      } else {
+        alert("Unsupported format! Upload CSV or Excel.");
+      }
+      return;
+    }
+
+    setSelectedFile(file);
+    const reader = new FileReader();
+
+    if (fileExtension === ".csv") {
+      reader.onload = async (e) => {
+        try {
+          const XLSX = await import("xlsx");
+          const text = e.target.result;
+          const workbook = XLSX.read(text, { type: "string" });
+          const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+          const sheetRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+          
+          const mappedCsv = mapColumnsToGeneric(sheetRows);
+          if (mappedCsv === null) {
+            clearSelectedFile();
+            return;
+          }
+          setParsedCount(Math.max(0, sheetRows.length - 1));
+          setParsedCsvText(mappedCsv);
+        } catch (error) {
+          if (showToast) {
+            showToast("Failed to parse CSV file.", "error");
+          } else {
+            alert("Failed to parse CSV file: " + error.message);
+          }
+          clearSelectedFile();
+        }
+      };
+      reader.readAsText(file);
+    } else {
+      reader.onload = async (e) => {
+        try {
+          const XLSX = await import("xlsx");
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: "array" });
+          const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+          const sheetRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+          
+          const mappedCsv = mapColumnsToGeneric(sheetRows);
+          if (mappedCsv === null) {
+            clearSelectedFile();
+            return;
+          }
+          setParsedCount(Math.max(0, sheetRows.length - 1));
+          setParsedCsvText(mappedCsv);
+        } catch (error) {
+          if (showToast) {
+            showToast("Failed to parse Excel file.", "error");
+          } else {
+            alert("Failed to parse Excel file: " + error.message);
+          }
+          clearSelectedFile();
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+  };
+
+  const getPreviewRows = () => {
+    if (!parsedCsvText) return { headers: [], rows: [] };
+    const lines = parsedCsvText.split("\n").filter(line => line.trim());
+    if (lines.length === 0) return { headers: [], rows: [] };
+    
+    const headers = lines[0].split(",").map(h => h.trim());
+    const rows = lines.slice(1).map(line => {
+      if (line.startsWith('"') && line.endsWith('"')) {
+        return line.slice(1, -1).split('","');
+      }
+      return line.split(",");
+    });
+    return { headers, rows };
+  };
+
+  const preview = getPreviewRows();
+
+  const getEmpIdsFromRawCsv = (csv) => {
+    const lines = csv.split("\n").filter(line => line.trim());
+    if (lines.length <= 1) return [];
+    const headers = lines[0].split(",").map(h => h.trim().toLowerCase());
+    const empIdIdx = headers.indexOf("empid");
+    if (empIdIdx === -1) return [];
+    
+    return lines.slice(1).map(line => {
+      let cells = [];
+      if (line.startsWith('"') && line.endsWith('"')) {
+        cells = line.slice(1, -1).split('","');
+      } else {
+        cells = line.split(",");
+      }
+      return (cells[empIdIdx] || "").toString().trim();
+    }).filter(Boolean);
+  };
+
+  const executeImport = async (csvData, cleanImport) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/staff/invigilators/import-csv`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ csv: csvData, cleanImport })
+      });
+      const data = await res.json();
+      
+      if (res.ok && data.ok) {
+        const totalSaved = (data.upserted || 0) + (data.matched || 0);
+        if (showToast) {
+          showToast("Invigilator roster processed successfully.", "success");
+        }
+        
+        if (setDialog) {
+          setDialog({
+            isOpen: true,
+            type: "alert",
+            title: "Import Roster Summary",
+            message: `Roster upload complete!\n\n• Total Rows Uploaded: ${parsedCount || data.total}\n• New Staff Added: ${data.upserted || 0}\n• Existing Staff Updated: ${data.matched || 0}\n• Total Saved/Updated: ${totalSaved}\n\n${
+              totalSaved < (parsedCount || data.total)
+                ? `⚠️ Note: Only ${totalSaved} out of ${parsedCount || data.total} rows were saved. Check if there were duplicates or empty fields.`
+                : `All ${parsedCount || data.total} invigilator entries were successfully saved.`
+            }\n\n${
+              cleanImport ? "All existing invigilators and their assignments were cleared before importing." : ""
+            }`,
+            onConfirm: () => setDialog(prev => ({ ...prev, isOpen: false }))
+          });
+        }
+        clearSelectedFile();
+        setCsvText("");
+        setShowManualPaste(false);
+        if (onRefresh) onRefresh();
+      } else {
+        const errorMsg = data.error || "Import error";
+        if (showToast) showToast(errorMsg, "error");
+        else alert(errorMsg);
+      }
+    } catch (e) {
+      if (showToast) showToast("Import failed: " + e.message, "error");
+      else alert("Import failed: " + e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const importParsedData = async () => {
+    if (!parsedCsvText.trim()) {
+      if (showToast) showToast("No parsed data found.", "error");
+      return;
+    }
+    
+    const uploadedEmpIds = getEmpIdsFromRawCsv(parsedCsvText);
+    const existingEmpIds = invigilators.map(i => (i.empId || "").toString().trim()).filter(Boolean);
+    const duplicates = uploadedEmpIds.filter(id => existingEmpIds.includes(id));
+
+    if (duplicates.length > 0 && setDialog) {
+      setDialog({
+        isOpen: true,
+        type: "import-conflict",
+        conflictEntity: "invigilator",
+        title: "Import Conflict Resolution",
+        onConfirm: async (cleanImport) => {
+          setDialog(prev => ({ ...prev, isOpen: false }));
+          await executeImport(parsedCsvText, cleanImport);
+        },
+        onCancel: () => setDialog(prev => ({ ...prev, isOpen: false }))
+      });
+    } else {
+      await executeImport(parsedCsvText, false);
+    }
+  };
+
+  const importCSV = async () => {
+    if (!csvText.trim()) {
+      if (showToast) showToast("Paste CSV first (Full Name, Employee ID, Department, Phone, Email)", "warning");
+      return;
+    }
+
+    const lines = csvText.split("\n").filter(line => line.trim());
+    if (lines.length === 0) return;
+
+    let hasHeader = false;
+    let cleanHeaders = [];
+    if (lines.length > 0) {
+      cleanHeaders = lines[0].split(",").map(h => h.trim().toLowerCase());
+      hasHeader = cleanHeaders.includes("employee id") || 
+                  cleanHeaders.includes("empid") || 
+                  cleanHeaders.includes("emp id") || 
+                  cleanHeaders.includes("name") || 
+                  cleanHeaders.includes("full name");
+    }
+
+    let empIdIdx = 1;
+    if (hasHeader) {
+      empIdIdx = cleanHeaders.findIndex(h => ["employee id", "empid", "emp id", "id"].includes(h));
+      if (empIdIdx === -1) empIdIdx = 1;
+    }
+
+    const dataLines = hasHeader ? lines.slice(1) : lines;
+    const uploadedEmpIds = dataLines.map(line => {
+      const cells = line.split(",");
+      return (cells[empIdIdx] || "").toString().trim();
+    }).filter(Boolean);
+
+    const existingEmpIds = invigilators.map(i => (i.empId || "").toString().trim()).filter(Boolean);
+    const duplicates = uploadedEmpIds.filter(id => existingEmpIds.includes(id));
+
+    if (duplicates.length > 0 && setDialog) {
+      setDialog({
+        isOpen: true,
+        type: "import-conflict",
+        conflictEntity: "invigilator",
+        title: "Import Conflict Resolution",
+        onConfirm: async (cleanImport) => {
+          setDialog(prev => ({ ...prev, isOpen: false }));
+          await executeImport(csvText, cleanImport);
+        },
+        onCancel: () => setDialog(prev => ({ ...prev, isOpen: false }))
+      });
+    } else {
+      await executeImport(csvText, false);
+    }
+  };
   const [showAllInvigilators, setShowAllInvigilators] = useState(false);
   const [invigilatorsPerRoom, setInvigilatorsPerRoom] = useState(1);
   const [distributors, setDistributors] = useState(2);
@@ -261,6 +628,183 @@ const Invigilators = ({ token, invigilators, onAdd, onEdit, onDelete, onAssign, 
           <i className="las la-sync-alt text-sm"></i> Refetch Staff List
         </button>
       </div>
+
+      {/* Bulk Import Card */}
+      {userRole === "admin" && (
+        <section className="bg-white shadow rounded-lg p-6 border border-gray-150 animate-fadeIn">
+          <h3 className="text-sm font-bold text-red-700 mb-4 flex items-center gap-1.5">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Import Invigilators via Excel/CSV
+          </h3>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-4">
+            <div className="lg:col-span-2">
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center min-h-[140px] ${
+                  isDragging
+                    ? "border-red-500 bg-red-50/20 scale-[1.01]"
+                    : "border-gray-250 hover:border-red-400 hover:bg-gray-50/30"
+                }`}
+              >
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileSelect}
+                  accept=".csv,.xlsx,.xls"
+                  className="hidden"
+                />
+                <div className="p-2.5 bg-red-50 rounded-full text-red-700 mb-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                </div>
+                <p className="text-xs font-bold text-gray-700">
+                  Drag and drop your CSV or Excel file here, or <span className="text-red-700 hover:underline">browse</span>
+                </p>
+                <p className="text-[10px] text-gray-400 mt-1 font-medium">Supports CSV, XLSX, XLS format</p>
+              </div>
+            </div>
+
+            {/* Template Download Guide */}
+            <div className="border border-gray-200 rounded-2xl p-5 bg-gray-50/20 flex flex-col justify-between">
+              <div>
+                <h4 className="text-xs font-bold text-gray-800">Download Template Document</h4>
+                <p className="text-[10px] text-gray-550 mt-1 leading-relaxed font-semibold">
+                  Get pre-formatted spreadsheet templates with the required columns for invigilators.
+                </p>
+              </div>
+              <div className="flex gap-2.5 mt-4">
+                <button
+                  onClick={() => downloadTemplate("xlsx")}
+                  className="flex-1 bg-white hover:bg-gray-50 text-gray-750 font-bold py-2 px-3 border border-gray-250 rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                >
+                  Excel Template
+                </button>
+                <button
+                  onClick={() => downloadTemplate("csv")}
+                  className="flex-1 bg-white hover:bg-gray-50 text-gray-755 font-bold py-2 px-3 border border-gray-250 rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                >
+                  CSV Template
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Parsed File Preview Section */}
+          {selectedFile && (
+            <div id="uploaded-invig-data-preview" className="mb-4 border border-gray-200 rounded-2xl p-5 bg-white animate-fadeIn">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-3.5">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-green-50 text-green-700 rounded-xl">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-800">{selectedFile.name}</h4>
+                    <p className="text-[10px] text-gray-500 font-semibold mt-0.5">Parsed {parsedCount} staff entries from uploaded file.</p>
+                  </div>
+                </div>
+                <button
+                  onClick={clearSelectedFile}
+                  className="text-gray-400 hover:text-gray-600 p-1 border border-gray-150 rounded-lg hover:bg-gray-50 cursor-pointer"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Spreadsheet Grid Preview */}
+              <div className="overflow-x-auto border border-gray-150 rounded-xl max-h-56">
+                <table className="min-w-full divide-y divide-gray-150 text-xs">
+                  <thead className="bg-gray-50/80 sticky top-0 backdrop-blur-xs">
+                    <tr>
+                      {preview.headers.map((h, i) => (
+                        <th key={i} className="px-4 py-2 text-left font-bold text-gray-600 uppercase tracking-wider border-r border-gray-150/70 last:border-r-0">
+                          {h === "name" ? "Full Name" : h === "empId" ? "Employee ID" : h === "dept" ? "Department" : h === "phone" ? "Phone" : h === "email" ? "Email Address" : h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-150 bg-white">
+                    {preview.rows.slice(0, 5).map((row, idx) => (
+                      <tr key={idx} className="hover:bg-gray-50/50">
+                        {row.map((cell, ci) => (
+                          <td key={ci} className="px-4 py-2 font-medium text-gray-700 border-r border-gray-100 last:border-r-0 max-w-[200px] truncate">
+                            {cell}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {preview.rows.length > 5 && (
+                <p className="text-[9px] text-gray-400 mt-2 italic font-semibold">Showing top 5 preview rows out of {preview.rows.length} total entries.</p>
+              )}
+
+              <div className="flex justify-end gap-2.5 mt-5 border-t border-gray-100 pt-3.5">
+                <button
+                  onClick={clearSelectedFile}
+                  className="border border-gray-250 bg-white hover:bg-gray-50 text-gray-700 font-semibold py-1.5 px-4 rounded-xl text-xs transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={importParsedData}
+                  disabled={loading}
+                  className="bg-red-700 hover:bg-red-800 disabled:bg-gray-300 text-white font-bold py-1.5 px-5 rounded-xl text-xs transition-colors cursor-pointer shadow-md"
+                >
+                  {loading ? "Importing..." : "Confirm & Import Staff"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Manual Paste Section */}
+          <div className="border-t border-gray-100 pt-4 mt-2">
+            <button
+              onClick={() => setShowManualPaste(!showManualPaste)}
+              className="text-xs text-red-700 hover:text-red-800 font-bold flex items-center gap-1 cursor-pointer"
+            >
+              <svg className={`w-3.5 h-3.5 transition-transform ${showManualPaste ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+              Or manually paste raw CSV data
+            </button>
+            
+            {showManualPaste && (
+              <div className="mt-4 p-4 border border-gray-200 bg-gray-50/50 rounded-xl space-y-3 animate-fadeIn">
+                <p className="text-[10px] text-gray-500 leading-relaxed font-medium">
+                  Provide comma-separated values matching: <strong>Full Name, Employee ID, Department, Phone, Email</strong>
+                </p>
+                <textarea
+                  className="w-full h-32 border rounded px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-red-500 bg-white font-mono text-black"
+                  placeholder="John Doe,EMP-101,Computer Science,+91 9876543210,professor@college.edu&#10;Jane Smith,EMP-102,Mathematics,+91 9876543211,janesmith@college.edu"
+                  value={csvText}
+                  onChange={(e) => setCsvText(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={importCSV}
+                    disabled={loading}
+                    className="bg-red-700 hover:bg-red-800 disabled:bg-gray-300 text-white font-bold py-1.5 px-4 rounded-xl text-xs cursor-pointer shadow-sm"
+                  >
+                    {loading ? "Importing..." : "Import CSV Text"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
         

@@ -9,6 +9,7 @@ router.use(authMiddleware);
 // Invigilator management
 router.get("/invigilators", staffController.getInvigilators);
 router.post("/invigilators", adminOnly, staffController.addInvigilator);
+router.post("/invigilators/import-csv", adminOnly, staffController.importCSV);
 router.put("/invigilators/:id", adminOnly, staffController.updateInvigilator);
 router.delete("/invigilators/:id", adminOnly, staffController.deleteInvigilator);
 

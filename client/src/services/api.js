@@ -155,6 +155,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify(invigilatorData),
     }, token),
+  importInvigilatorsCSV: (csv, cleanImport, token) =>
+    request("/staff/invigilators/import-csv", {
+      method: "POST",
+      body: JSON.stringify({ csv, cleanImport }),
+    }, token),
   updateInvigilator: (id, invigilatorData, token) =>
     request(`/staff/invigilators/${id}`, {
       method: "PUT",

@@ -1,3 +1,4 @@
+import { parse } from "csv-parse/sync";
 import Invigilator from "../models/Invigilator.js";
 import InvigAssignment from "../models/InvigAssignment.js";
 import Allotment from "../models/Allotment.js";
@@ -128,6 +129,94 @@ export const deleteInvigilator = async (req, res) => {
     await InvigAssignment.deleteMany({ invigilator: id, orgCode: req.user.adminCode });
 
     res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+};
+
+export const importCSV = async (req, res) => {
+  try {
+    const csvText = req.body.csv;
+    if (!csvText) return res.status(400).json({ error: "csv required" });
+    const records = parse(csvText, { trim: true, skip_empty_lines: true });
+    if (records.length === 0) return res.status(400).json({ error: "no rows" });
+
+    if (req.body.cleanImport === true || req.body.cleanImport === "true") {
+      await Invigilator.deleteMany({ orgCode: req.user.adminCode });
+      await InvigAssignment.deleteMany({ orgCode: req.user.adminCode });
+    }
+
+    const originalHeaders = records[0];
+    const cleanHeaders = originalHeaders.map(h => (h || "").toString().trim().toLowerCase());
+    
+    const hasHeader = cleanHeaders.includes("employee id") || 
+                      cleanHeaders.includes("empid") || 
+                      cleanHeaders.includes("emp id") || 
+                      cleanHeaders.includes("name") || 
+                      cleanHeaders.includes("full name");
+
+    if (hasHeader) records.shift();
+
+    let nameIdx = 0;
+    let empIdIdx = 1;
+    let deptIdx = 2;
+    let phoneIdx = 3;
+    let emailIdx = 4;
+
+    if (hasHeader) {
+      nameIdx = cleanHeaders.findIndex(h => ["name", "full name", "invigilator name", "staff name"].includes(h));
+      empIdIdx = cleanHeaders.findIndex(h => ["employee id", "empid", "emp id", "id"].includes(h));
+      deptIdx = cleanHeaders.findIndex(h => ["department", "dept"].includes(h));
+      phoneIdx = cleanHeaders.findIndex(h => ["phone", "phone number", "mobile", "contact"].includes(h));
+      emailIdx = cleanHeaders.findIndex(h => ["email", "email address"].includes(h));
+    }
+
+    if (hasHeader) {
+      if (nameIdx === -1) nameIdx = 0;
+      if (empIdIdx === -1) empIdIdx = 1;
+      if (deptIdx === -1) deptIdx = 2;
+      if (phoneIdx === -1) phoneIdx = 3;
+      if (emailIdx === -1) emailIdx = 4;
+    }
+
+    const ops = records.map(row => {
+      const name = (row[nameIdx] || "").toString().trim();
+      const empId = (row[empIdIdx] || "").toString().trim();
+      if (!name || !empId) return null;
+
+      const dept = deptIdx !== -1 && row[deptIdx] ? row[deptIdx].toString().trim() : "";
+      const phone = phoneIdx !== -1 && row[phoneIdx] ? row[phoneIdx].toString().trim() : "";
+      const email = emailIdx !== -1 && row[emailIdx] ? row[emailIdx].toString().trim() : "";
+
+      return {
+        updateOne: {
+          filter: { empId, orgCode: req.user.adminCode },
+          update: {
+            $set: {
+              name,
+              empId,
+              dept,
+              phone,
+              email,
+              orgCode: req.user.adminCode
+            }
+          },
+          upsert: true
+        }
+      };
+    }).filter(Boolean);
+
+    if (ops.length === 0) return res.status(400).json({ error: "no valid rows" });
+    const resu = await Invigilator.bulkWrite(ops);
+
+    res.json({
+      ok: true,
+      upserted: resu.upsertedCount || resu.nUpserted || 0,
+      matched: resu.matchedCount || resu.nMatched || 0,
+      modified: resu.modifiedCount || resu.nModified || 0,
+      inserted: resu.insertedCount || resu.nInserted || 0,
+      total: ops.length
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
