@@ -22,6 +22,40 @@ export default function ProfileTab({
   const decoded = decodeToken(token);
 
   const [editingItem, setEditingItem] = React.useState(null);
+  const [tawkPropertyId, setTawkPropertyId] = React.useState(() => {
+    return localStorage.getItem("tawk_property_id") || import.meta.env.VITE_TAWK_PROPERTY_ID || "";
+  });
+  const [tawkWidgetId, setTawkWidgetId] = React.useState(() => {
+    return localStorage.getItem("tawk_widget_id") || import.meta.env.VITE_TAWK_WIDGET_ID || "default";
+  });
+
+  const handleSaveTawkConfig = (e) => {
+    e.preventDefault();
+    if (!tawkPropertyId.trim()) {
+      localStorage.removeItem("tawk_property_id");
+      localStorage.removeItem("tawk_widget_id");
+      if (showToast) showToast("Tawk.to configuration cleared. Reloading page...", "info");
+    } else {
+      localStorage.setItem("tawk_property_id", tawkPropertyId.trim());
+      localStorage.setItem("tawk_widget_id", tawkWidgetId.trim() || "default");
+      if (showToast) showToast("Tawk.to chat widget configured! Reloading to apply changes...", "success");
+    }
+    setTimeout(() => {
+      window.location.reload();
+    }, 1500);
+  };
+
+  const handleResetTawkConfig = () => {
+    localStorage.removeItem("tawk_property_id");
+    localStorage.removeItem("tawk_widget_id");
+    setTawkPropertyId(import.meta.env.VITE_TAWK_PROPERTY_ID || "");
+    setTawkWidgetId(import.meta.env.VITE_TAWK_WIDGET_ID || "default");
+    if (showToast) showToast("Cleared localStorage override. Reloading...", "info");
+    setTimeout(() => {
+      window.location.reload();
+    }, 1500);
+  };
+
   const [editDate, setEditDate] = React.useState("");
   const [editShift, setEditShift] = React.useState(1);
   const [editTime, setEditTime] = React.useState("");
@@ -265,6 +299,79 @@ export default function ProfileTab({
             </div>
           )}
         </section>
+
+        {/* Tawk.to Live Chat Integration Settings */}
+        {userRole === "admin" && (
+          <section className="bg-white shadow rounded-lg p-6 border border-gray-150 animate-fadeIn">
+            <h3 className="text-lg font-bold text-red-700 flex items-center gap-2 mb-2 select-none">
+              <i className="las la-comments text-xl text-red-750"></i>
+              Live Chat Support Integration (Tawk.to)
+            </h3>
+            <p className="text-xs text-gray-500 mb-4 leading-relaxed font-semibold">
+              Integrate a live chat support widget on your exam seat allotment app to assist users, invigilators, and students in real time.
+            </p>
+            <form onSubmit={handleSaveTawkConfig} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1">
+                    Tawk.to Property ID
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 60b7xxxxxxxxxxxxxxxx"
+                    value={tawkPropertyId}
+                    onChange={(e) => setTawkPropertyId(e.target.value)}
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-red-500/20 focus:border-red-650 font-mono font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1">
+                    Tawk.to Widget ID
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 1f7xxxxxx (default: default)"
+                    value={tawkWidgetId}
+                    onChange={(e) => setTawkWidgetId(e.target.value)}
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-red-500/20 focus:border-red-650 font-mono font-medium"
+                  />
+                </div>
+              </div>
+
+              <div className="bg-red-50/50 border border-red-100 rounded-xl p-3.5 space-y-2">
+                <h4 className="text-[10px] font-bold text-red-800 uppercase tracking-wider flex items-center gap-1">
+                  <i className="las la-info-circle text-sm animate-pulse"></i>
+                  Where to find these IDs?
+                </h4>
+                <ol className="list-decimal pl-4 text-[10px] text-gray-650 space-y-1 font-semibold leading-relaxed">
+                  <li>Log in to your <strong>Tawk.to</strong> account dashboard.</li>
+                  <li>Go to <strong>Administration (Gear Icon) &gt; Channels &gt; Chat Widget</strong>.</li>
+                  <li>Look at the <strong>Direct Chat Link</strong> (e.g., <code>https://embed.tawk.to/<b>PROPERTY_ID</b>/<b>WIDGET_ID</b></code>).</li>
+                  <li>Copy and paste those values here. Leaving the Property ID empty will disable the chat widget.</li>
+                </ol>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                {localStorage.getItem("tawk_property_id") && (
+                  <button
+                    type="button"
+                    onClick={handleResetTawkConfig}
+                    className="bg-gray-150 hover:bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-xl text-xs transition-all cursor-pointer"
+                  >
+                    Clear Override
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  className="bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-5 rounded-xl text-xs transition-all cursor-pointer shadow-sm flex items-center gap-1.5"
+                >
+                  <i className="las la-save text-sm"></i>
+                  Save Chat Widget
+                </button>
+              </div>
+            </form>
+          </section>
+        )}
       </div>
 
       {/* Edit saved schedule modal */}

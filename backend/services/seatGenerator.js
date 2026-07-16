@@ -98,6 +98,10 @@ export function generateAllotments({ students = [], rooms = [], shift = 1, seed 
             continue;
           }
         }
+        if (occupancy[`${r},${c}`]) {
+          // Already occupied (e.g. by a blocker student)
+          continue;
+        }
         let placed = false;
         for (let relax = 0; relax <= 2 && !placed; relax++) {
           for (let i = 0; i < shuffled.length; i++) {
@@ -105,9 +109,9 @@ export function generateAllotments({ students = [], rooms = [], shift = 1, seed 
             if (!st) continue;
             if (used.has(String(st._id))) continue;
 
-            // collect neighbor students
+            // collect horizontal neighbor students (West, East) for parallel checks
             const neighbors = [];
-            for (const [dr, dc] of neighborOffsets) {
+            for (const [dr, dc] of [[0, -1], [0, 1]]) {
               const key = `${r + dr},${c + dc}`;
               if (occupancy[key]) neighbors.push(occupancy[key]);
             }
@@ -140,7 +144,15 @@ export function generateAllotments({ students = [], rooms = [], shift = 1, seed 
                   break;
                 }
               } else {
-                // relax === 2 allow all
+                // relax === 2: prevent same class (dept & sem) or same subject horizontally
+                if (shareAnySubject(st, nb)) {
+                  ok = false;
+                  break;
+                }
+                if (nb.dept === st.dept && String(nb.sem) === String(st.sem)) {
+                  ok = false;
+                  break;
+                }
               }
             }
 

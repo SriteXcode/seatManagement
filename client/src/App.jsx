@@ -29,6 +29,7 @@ import LandingPage from "./components/landing/LandingPage";
 import ToastContainer from "./components/common/ToastContainer";
 import CustomDialog from "./components/common/CustomDialog";
 import CursorFollower from "./components/common/CursorFollower";
+import TawkChat from "./components/TawkChat";
 
 export default function App() {
   const { token, login, logout, userRole, decoded, isLoggedIn } = useAuth();
@@ -3201,6 +3202,9 @@ export default function App() {
 
       {/* Dynamic Cursor Interaction Follower */}
       <CursorFollower />
+
+      {/* Tawk.to Live Chat Support Widget */}
+      <TawkChat />
     </>
   );
 }
