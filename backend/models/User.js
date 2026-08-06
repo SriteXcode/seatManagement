@@ -12,7 +12,10 @@ const userSchema = new mongoose.Schema({
   orgName: { type: String }, // Organization name for Admin
   adminCode: { type: String }, // 6-digit unique code generated for Admin
   staffCode: { type: String }, // 6-digit code staff signed up with
-  isApproved: { type: Boolean, default: false } // true for admins, false for staff until approved
+  isApproved: { type: Boolean, default: false }, // true for admins, false for staff until approved
+  tawkPropertyId: { type: String, default: "" },
+  tawkWidgetId: { type: String, default: "" },
+  tawkDepartment: { type: String, default: "" }
 }, { timestamps: true });
 
 export default mongoose.model("User", userSchema);

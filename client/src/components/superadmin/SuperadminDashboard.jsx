@@ -18,6 +18,10 @@ export default function SuperadminDashboard({ token, onLogout, showToast }) {
   const [inquiryFilter, setInquiryFilter] = useState(""); // "" (All), "Bug Report", "Feature Request", "Contact Query"
   const [searchTerm, setSearchTerm] = useState("");
   const [processingInquiryId, setProcessingInquiryId] = useState(null);
+  const [tawkPropertyId, setTawkPropertyId] = useState("");
+  const [tawkWidgetId, setTawkWidgetId] = useState("default");
+  const [tawkDepartment, setTawkDepartment] = useState("");
+  const [isEditingTawk, setIsEditingTawk] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -30,10 +34,85 @@ export default function SuperadminDashboard({ token, onLogout, showToast }) {
       setStats(statsData);
       setOrgs(orgsData);
       setInquiries(inquiriesData);
+
+      // Fetch Global Tawk Config
+      const apiBase = import.meta.env.VITE_API || "http://localhost:4000";
+      const tawkResponse = await fetch(`${apiBase}/auth/tawk-config`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (tawkResponse.ok) {
+        const tawkData = await tawkResponse.json();
+        if (tawkData.tawkPropertyId) {
+          setTawkPropertyId(tawkData.tawkPropertyId);
+          setTawkWidgetId(tawkData.tawkWidgetId || "default");
+          setTawkDepartment(tawkData.tawkDepartment || "");
+        }
+      }
     } catch (err) {
       showToast(err.message || "Failed to load superadmin data", "error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveTawkConfig = async (e) => {
+    e.preventDefault();
+    try {
+      const apiBase = import.meta.env.VITE_API || "http://localhost:4000";
+      const response = await fetch(`${apiBase}/auth/tawk-config`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          tawkPropertyId: tawkPropertyId.trim(),
+          tawkWidgetId: tawkWidgetId.trim() || "default",
+          tawkDepartment: tawkDepartment.trim()
+        })
+      });
+      if (response.ok) {
+        showToast("Global Tawk.to chat widget configured and saved to database! Reloading page...", "success");
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+      } else {
+        const data = await response.json();
+        showToast(data.error || "Failed to save configuration", "error");
+      }
+    } catch (err) {
+      showToast("Error saving configuration: " + err.message, "error");
+    }
+  };
+
+  const handleResetTawkConfig = async () => {
+    try {
+      const apiBase = import.meta.env.VITE_API || "http://localhost:4000";
+      const response = await fetch(`${apiBase}/auth/tawk-config`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          tawkPropertyId: "",
+          tawkWidgetId: "default",
+          tawkDepartment: ""
+        })
+      });
+      if (response.ok) {
+        setTawkPropertyId("");
+        setTawkWidgetId("default");
+        setTawkDepartment("");
+        showToast("Global chat widget disabled/cleared in database! Reloading...", "info");
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+      } else {
+        showToast("Failed to clear configuration", "error");
+      }
+    } catch (err) {
+      showToast("Error clearing configuration: " + err.message, "error");
     }
   };
 
@@ -226,10 +305,23 @@ export default function SuperadminDashboard({ token, onLogout, showToast }) {
                   </span>
                 )}
               </button>
+              <button 
+                onClick={() => {
+                  setActiveSubTab("chat-settings");
+                  setSearchTerm("");
+                }}
+                className={`py-3 px-6 font-bold text-xs border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+                  activeSubTab === "chat-settings"
+                    ? "border-red-750 text-red-700 font-extrabold bg-red-50/10"
+                    : "border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50/40"
+                }`}
+              >
+                <i className="las la-comments"></i> Global Chat Settings
+              </button>
             </div>
 
             {/* 4. Tab Contents */}
-            {activeSubTab === "overview" ? (
+            {activeSubTab === "overview" && (
               <section className="bg-white border border-gray-100 rounded-2xl shadow-3xs p-6 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
@@ -298,11 +390,13 @@ export default function SuperadminDashboard({ token, onLogout, showToast }) {
                   </table>
                 </div>
               </section>
-            ) : (
+            )}
+
+            {activeSubTab === "inbox" && (
               <section className="bg-white border border-gray-100 rounded-2xl shadow-3xs p-6 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="space-y-0.5">
-                    <h3 className="text-xs font-bold text-gray-805 uppercase tracking-wider">Inquiries Inbox</h3>
+                    <h3 className="text-xs font-bold text-gray-855 uppercase tracking-wider">Inquiries Inbox</h3>
                     <p className="text-[10px] text-gray-400 font-semibold">Read and manage inquiries, support tickets, and bug reports sent by users.</p>
                   </div>
                   
@@ -373,7 +467,7 @@ export default function SuperadminDashboard({ token, onLogout, showToast }) {
                               </div>
                               <div>
                                 <span className="block text-[9px] text-gray-400 uppercase">Email</span>
-                                <span className="text-gray-600 select-all block break-all">{inq.email}</span>
+                                <span className="text-gray-605 select-all block break-all">{inq.email}</span>
                               </div>
                             </div>
                             
@@ -419,6 +513,114 @@ export default function SuperadminDashboard({ token, onLogout, showToast }) {
                     })
                   )}
                 </div>
+              </section>
+            )}
+
+            {activeSubTab === "chat-settings" && (
+              <section className="bg-white border border-gray-100 rounded-2xl shadow-3xs p-6 space-y-4 animate-fadeIn">
+                <div className="space-y-0.5">
+                  <h3 className="text-xs font-bold text-gray-855 uppercase tracking-wider">Global Live Chat Support (Tawk.to)</h3>
+                  <p className="text-[10px] text-gray-450 font-semibold leading-relaxed">Configure a platform-wide fallback chat widget. If a university/college administrator has not set up their own widget, students and users will automatically load this global support widget.</p>
+                </div>
+
+                <form onSubmit={handleSaveTawkConfig} className="space-y-4 pt-2">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                        Global Tawk.to Property ID
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 60b7xxxxxxxxxxxxxxxx"
+                        value={tawkPropertyId}
+                        onChange={(e) => setTawkPropertyId(e.target.value)}
+                        disabled={!isEditingTawk}
+                        className={`w-full border border-gray-250 rounded-xl px-3 py-2 text-xs focus:outline-hidden focus:ring-2 focus:ring-red-500/20 focus:border-red-650 font-mono font-medium ${!isEditingTawk ? "bg-gray-50 text-gray-500 cursor-not-allowed" : "bg-white text-black"}`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                        Global Tawk.to Widget ID
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 1f7xxxxxx (default: default)"
+                        value={tawkWidgetId}
+                        onChange={(e) => setTawkWidgetId(e.target.value)}
+                        disabled={!isEditingTawk}
+                        className={`w-full border border-gray-250 rounded-xl px-3 py-2 text-xs focus:outline-hidden focus:ring-2 focus:ring-red-500/20 focus:border-red-650 font-mono font-medium ${!isEditingTawk ? "bg-gray-50 text-gray-500 cursor-not-allowed" : "bg-white text-black"}`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                        Global Tawk.to Department ID/Name
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Support, Billing"
+                        value={tawkDepartment}
+                        onChange={(e) => setTawkDepartment(e.target.value)}
+                        disabled={!isEditingTawk}
+                        className={`w-full border border-gray-250 rounded-xl px-3 py-2 text-xs focus:outline-hidden focus:ring-2 focus:ring-red-500/20 focus:border-red-650 font-mono font-medium ${!isEditingTawk ? "bg-gray-50 text-gray-500 cursor-not-allowed" : "bg-white text-black"}`}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="bg-red-50/50 border border-red-100 rounded-xl p-3.5 space-y-2">
+                    <h4 className="text-[10px] font-bold text-red-800 uppercase tracking-wider flex items-center gap-1">
+                      <i className="las la-info-circle text-sm animate-pulse"></i>
+                      Platform Support Fallback Flow
+                    </h4>
+                    <ol className="list-decimal pl-4 text-[10px] text-gray-650 space-y-1 font-semibold leading-relaxed">
+                      <li>Configure your primary platform support property details here.</li>
+                      <li>These credentials act as the universal fallback widget across all landing, login, and registration pages.</li>
+                      <li>If a local college administrator configures their own widget, their widget will take precedence and load instead of this global widget.</li>
+                      <li>Leaving this Property ID empty disables the fallback chat widget globally.</li>
+                    </ol>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2">
+                    {!isEditingTawk ? (
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingTawk(true)}
+                        className="bg-red-750 hover:bg-red-800 text-white font-bold py-2 px-5 rounded-xl text-xs transition-all cursor-pointer shadow-sm flex items-center gap-1.5"
+                      >
+                        <i className="las la-edit text-sm"></i>
+                        Edit Credentials
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsEditingTawk(false);
+                            fetchData(); // Reset form values to saved config
+                          }}
+                          className="bg-gray-150 hover:bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-xl text-xs transition-all cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        {tawkPropertyId && (
+                          <button
+                            type="button"
+                            onClick={handleResetTawkConfig}
+                            className="bg-gray-150 hover:bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-xl text-xs transition-all cursor-pointer"
+                          >
+                            Disable Global Chat
+                          </button>
+                        )}
+                        <button
+                          type="submit"
+                          className="bg-red-750 hover:bg-red-800 text-white font-bold py-2 px-5 rounded-xl text-xs transition-all cursor-pointer shadow-sm flex items-center gap-1.5"
+                        >
+                          <i className="las la-save text-sm"></i>
+                          Save Global Widget
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </form>
               </section>
             )}
           </>

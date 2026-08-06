@@ -22,38 +22,90 @@ export default function ProfileTab({
   const decoded = decodeToken(token);
 
   const [editingItem, setEditingItem] = React.useState(null);
-  const [tawkPropertyId, setTawkPropertyId] = React.useState(() => {
-    return localStorage.getItem("tawk_property_id") || import.meta.env.VITE_TAWK_PROPERTY_ID || "";
-  });
-  const [tawkWidgetId, setTawkWidgetId] = React.useState(() => {
-    return localStorage.getItem("tawk_widget_id") || import.meta.env.VITE_TAWK_WIDGET_ID || "default";
-  });
+  const [tawkPropertyId, setTawkPropertyId] = React.useState("");
+  const [tawkWidgetId, setTawkWidgetId] = React.useState("default");
+  const [tawkDepartment, setTawkDepartment] = React.useState("");
 
-  const handleSaveTawkConfig = (e) => {
-    e.preventDefault();
-    if (!tawkPropertyId.trim()) {
-      localStorage.removeItem("tawk_property_id");
-      localStorage.removeItem("tawk_widget_id");
-      if (showToast) showToast("Tawk.to configuration cleared. Reloading page...", "info");
-    } else {
-      localStorage.setItem("tawk_property_id", tawkPropertyId.trim());
-      localStorage.setItem("tawk_widget_id", tawkWidgetId.trim() || "default");
-      if (showToast) showToast("Tawk.to chat widget configured! Reloading to apply changes...", "success");
+  React.useEffect(() => {
+    if (userRole === "admin" && token) {
+      const apiBase = import.meta.env.VITE_API || "http://localhost:4000";
+      fetch(`${apiBase}/auth/tawk-config`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      .then(res => {
+        if (!res.ok) throw new Error("Failed to fetch tawk config");
+        return res.json();
+      })
+      .then(data => {
+        if (data.tawkPropertyId) {
+          setTawkPropertyId(data.tawkPropertyId);
+          setTawkWidgetId(data.tawkWidgetId || "default");
+          setTawkDepartment(data.tawkDepartment || "");
+        }
+      })
+      .catch(err => console.error("Error fetching tawk config inside profile tab:", err));
     }
-    setTimeout(() => {
-      window.location.reload();
-    }, 1500);
+  }, [userRole, token]);
+
+  const handleSaveTawkConfig = async (e) => {
+    e.preventDefault();
+    try {
+      const apiBase = import.meta.env.VITE_API || "http://localhost:4000";
+      const response = await fetch(`${apiBase}/auth/tawk-config`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          tawkPropertyId: tawkPropertyId.trim(),
+          tawkWidgetId: tawkWidgetId.trim() || "default",
+          tawkDepartment: tawkDepartment.trim()
+        })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        if (showToast) showToast("Tawk.to chat widget configured and saved to database! Reloading page...", "success");
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+      } else {
+        if (showToast) showToast(data.error || "Failed to save configuration", "error");
+      }
+    } catch (err) {
+      if (showToast) showToast("Error saving configuration: " + err.message, "error");
+    }
   };
 
-  const handleResetTawkConfig = () => {
-    localStorage.removeItem("tawk_property_id");
-    localStorage.removeItem("tawk_widget_id");
-    setTawkPropertyId(import.meta.env.VITE_TAWK_PROPERTY_ID || "");
-    setTawkWidgetId(import.meta.env.VITE_TAWK_WIDGET_ID || "default");
-    if (showToast) showToast("Cleared localStorage override. Reloading...", "info");
-    setTimeout(() => {
-      window.location.reload();
-    }, 1500);
+  const handleResetTawkConfig = async () => {
+    try {
+      const apiBase = import.meta.env.VITE_API || "http://localhost:4000";
+      const response = await fetch(`${apiBase}/auth/tawk-config`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          tawkPropertyId: "",
+          tawkWidgetId: "default",
+          tawkDepartment: ""
+        })
+      });
+      if (response.ok) {
+        setTawkPropertyId("");
+        setTawkWidgetId("default");
+        setTawkDepartment("");
+        if (showToast) showToast("Chat widget disabled/cleared in database! Reloading...", "info");
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+      } else {
+        if (showToast) showToast("Failed to clear configuration", "error");
+      }
+    } catch (err) {
+      if (showToast) showToast("Error clearing configuration: " + err.message, "error");
+    }
   };
 
   const [editDate, setEditDate] = React.useState("");
@@ -311,7 +363,7 @@ export default function ProfileTab({
               Integrate a live chat support widget on your exam seat allotment app to assist users, invigilators, and students in real time.
             </p>
             <form onSubmit={handleSaveTawkConfig} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-600 mb-1">
                     Tawk.to Property ID
@@ -336,6 +388,18 @@ export default function ProfileTab({
                     className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-red-500/20 focus:border-red-650 font-mono font-medium"
                   />
                 </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1">
+                    Tawk.to Department ID/Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Support, Billing"
+                    value={tawkDepartment}
+                    onChange={(e) => setTawkDepartment(e.target.value)}
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-red-500/20 focus:border-red-650 font-mono font-medium"
+                  />
+                </div>
               </div>
 
               <div className="bg-red-50/50 border border-red-100 rounded-xl p-3.5 space-y-2">
@@ -352,13 +416,13 @@ export default function ProfileTab({
               </div>
 
               <div className="flex justify-end gap-2">
-                {localStorage.getItem("tawk_property_id") && (
+                {tawkPropertyId && (
                   <button
                     type="button"
                     onClick={handleResetTawkConfig}
                     className="bg-gray-150 hover:bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-xl text-xs transition-all cursor-pointer"
                   >
-                    Clear Override
+                    Clear Configuration
                   </button>
                 )}
                 <button

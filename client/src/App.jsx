@@ -18,7 +18,7 @@ const StudentsTab = React.lazy(() => import("./components/students/StudentsTab")
 const StudentModal = React.lazy(() => import("./components/students/StudentModal"));
 const RoomsTab = React.lazy(() => import("./components/rooms/RoomsTab"));
 const AllotmentTab = React.lazy(() => import("./components/allotments/AllotmentTab"));
-// StagingBucket import is removed.
+const StagingBucket = React.lazy(() => import("./components/allotments/StagingBucket"));
 const DistancingModal = React.lazy(() => import("./components/allotments/DistancingModal"));
 const ProfileTab = React.lazy(() => import("./components/profile/ProfileTab"));
 const FormBuilderTab = React.lazy(() => import("./components/students/FormBuilderTab"));
@@ -1081,10 +1081,11 @@ export default function App() {
         metadata: updatedMetadata
       };
       const updatedAllotments = allotments.filter((_, idx) => idx !== sourceIndex);
+      const nextBucket = [...bucket.filter(b => b._id !== student._id), updatedStudent];
       setAllotments(updatedAllotments);
-      setBucket([]);
+      setBucket(nextBucket);
       showToast(`Unallotted ${student.roll}`, "success");
-      saveManualAllotments(updatedAllotments);
+      saveManualAllotments(updatedAllotments, nextBucket);
 
       api.updateStudent(student._id, {
         roll: student.roll,
@@ -2212,8 +2213,36 @@ export default function App() {
         if (res.ok) {
           showToast("Allotment generated successfully!", "success");
           setDeptSemCombinations([]);
-          fetchAllotments();
-          fetchSchedules();
+          
+          const data = await api.getAllotments(shift, date, token);
+          if (Array.isArray(data)) {
+            const placed = data.filter(a => a.room);
+            const staged = data.filter(a => !a.room);
+
+            setAllotments(placed);
+
+            const stagedStudents = staged.map(a => {
+              if (!a.student) return null;
+              const student = a.student;
+              return {
+                ...student,
+                previousSeat: student.metadata && student.metadata.previousRoomName ? {
+                  roomName: student.metadata.previousRoomName,
+                  seatLabel: student.metadata.previousSeatLabel,
+                  date: student.metadata.previousDate,
+                  shift: student.metadata.previousShift
+                } : null
+              };
+            }).filter(Boolean);
+            setBucket(stagedStudents);
+
+            fetchSchedules();
+            fetchRoomSchedules();
+
+            if (stagedStudents.length > 0) {
+              showUnallottedDiagnostics(stagedStudents, placed);
+            }
+          }
         } else {
           showToast(res.error || "Generation error", "error");
         }
@@ -2262,7 +2291,35 @@ export default function App() {
 
       if (res.ok) {
         showToast("Arrangement successfully regenerated!", "success");
-        fetchAllotments();
+        
+        const data = await api.getAllotments(shift, date, token);
+        if (Array.isArray(data)) {
+          const placed = data.filter(a => a.room);
+          const staged = data.filter(a => !a.room);
+
+          setAllotments(placed);
+
+          const stagedStudents = staged.map(a => {
+            if (!a.student) return null;
+            const student = a.student;
+            return {
+              ...student,
+              previousSeat: student.metadata && student.metadata.previousRoomName ? {
+                roomName: student.metadata.previousRoomName,
+                seatLabel: student.metadata.previousSeatLabel,
+                date: student.metadata.previousDate,
+                shift: student.metadata.previousShift
+              } : null
+            };
+          }).filter(Boolean);
+          setBucket(stagedStudents);
+
+          fetchRoomSchedules();
+
+          if (stagedStudents.length > 0) {
+            showUnallottedDiagnostics(stagedStudents, placed);
+          }
+        }
       } else {
         showToast(res.error || "Regeneration failed.", "error");
       }
@@ -2331,6 +2388,178 @@ export default function App() {
     });
     return { rows, cols, map };
   }
+
+  const downloadRemainingStudentsPDF = async (customBucket = bucket) => {
+    if (!customBucket || customBucket.length === 0) {
+      showToast("No remaining students to download.", "info");
+      return;
+    }
+
+    const element = document.createElement('div');
+    element.style.padding = '30px';
+    element.style.fontFamily = 'Inter, system-ui, sans-serif';
+    element.style.color = '#1f2937';
+
+    // Group students by variety (dept + sem)
+    const grouped = {};
+    customBucket.forEach(st => {
+      const key = `${st.dept} Sem ${st.sem}`;
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(st);
+    });
+
+    let groupsHtml = '';
+    for (const [groupName, students] of Object.entries(grouped)) {
+      const dept = students[0].dept;
+      const sem = students[0].sem;
+      const colorClass = getDeptColor(dept, sem);
+      const hexColor = {
+        "bg-red-200": "#fecaca",
+        "bg-yellow-200": "#fef08a",
+        "bg-green-200": "#d9f991",
+        "bg-blue-200": "#bfdbfe",
+        "bg-indigo-200": "#c7d2fe",
+        "bg-purple-200": "#e9d5ff",
+        "bg-pink-200": "#fbcfe8",
+        "bg-red-300": "#fca5a5",
+        "bg-yellow-300": "#fde047",
+        "bg-green-300": "#a3e635",
+        "bg-blue-300": "#93c5fd",
+        "bg-indigo-300": "#a5b4fc",
+        "bg-purple-300": "#d8b4fe",
+        "bg-pink-300": "#f9a8d4",
+      }[colorClass] || "#f3f4f6";
+
+      const rowsHtml = students.map((s, idx) => `
+        <tr style="border-bottom: 1px solid #e5e7eb;">
+          <td style="padding: 10px; font-size: 11px; font-weight: 600;">${idx + 1}</td>
+          <td style="padding: 10px; font-size: 11px; font-weight: bold; font-family: monospace;">${s.roll}</td>
+          <td style="padding: 10px; font-size: 11px; font-weight: 500;">${s.name || '-'}</td>
+          <td style="padding: 10px; font-size: 11px; font-weight: 600;">${s.dept}</td>
+          <td style="padding: 10px; font-size: 11px; font-weight: 600;">Sem ${s.sem}</td>
+          <td style="padding: 10px; font-size: 10px; color: #4b5563;">${Array.isArray(s.subject) ? s.subject.join(", ") : (s.subject || '-')}</td>
+        </tr>
+      `).join('');
+
+      groupsHtml += `
+        <div style="margin-bottom: 24px; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; page-break-inside: avoid;">
+          <div style="background-color: ${hexColor}; padding: 12px 16px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight: 800; font-size: 13px; color: #111827;">${groupName}</span>
+            <span style="font-size: 11px; font-weight: bold; background-color: rgba(255, 255, 255, 0.6); padding: 2px 8px; border-radius: 9999px; color: #111827;">${students.length} Students</span>
+          </div>
+          <table style="width: 100%; border-collapse: collapse; text-align: left; background: white;">
+            <thead>
+              <tr style="background-color: #f9fafb; border-bottom: 1px solid #e5e7eb;">
+                <th style="padding: 10px; font-size: 10px; font-weight: bold; text-transform: uppercase; color: #6b7280; width: 50px;">#</th>
+                <th style="padding: 10px; font-size: 10px; font-weight: bold; text-transform: uppercase; color: #6b7280; width: 100px;">Roll No</th>
+                <th style="padding: 10px; font-size: 10px; font-weight: bold; text-transform: uppercase; color: #6b7280;">Student Name</th>
+                <th style="padding: 10px; font-size: 10px; font-weight: bold; text-transform: uppercase; color: #6b7280; width: 80px;">Dept</th>
+                <th style="padding: 10px; font-size: 10px; font-weight: bold; text-transform: uppercase; color: #6b7280; width: 80px;">Sem</th>
+                <th style="padding: 10px; font-size: 10px; font-weight: bold; text-transform: uppercase; color: #6b7280;">Subjects</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    element.innerHTML = `
+      <div style="margin-bottom: 20px; border-bottom: 2px solid #ef4444; padding-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-end;">
+        <div>
+          <h2 style="font-size: 20px; font-weight: 800; color: #b91c1c; margin: 0; text-transform: uppercase; letter-spacing: 0.5px;">Unallotted Students Roster</h2>
+          <p style="font-size: 11px; color: #6b7280; margin: 4px 0 0 0; font-weight: 500;">
+            Date: <strong>${date}</strong> | Shift: <strong>${shift}</strong> ${time ? `| Time: <strong>${time}</strong>` : ''}
+          </p>
+        </div>
+        <div style="text-align: right;">
+          <span style="font-size: 18px; font-weight: 800; color: #111827;">${customBucket.length}</span>
+          <span style="font-size: 10px; font-weight: bold; text-transform: uppercase; color: #6b7280; display: block;">Total Staged</span>
+        </div>
+      </div>
+      <div>
+        ${groupsHtml}
+      </div>
+    `;
+
+    try {
+      const opt = {
+        margin: 0.5,
+        filename: `unallotted_roster_${date}_shift${shift}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+      };
+      const html2pdf = (await import("html2pdf.js")).default;
+      await html2pdf().set(opt).from(element).save();
+      showToast("PDF downloaded successfully.", "success");
+    } catch (error) {
+      console.error("Error downloading remaining PDF:", error);
+      showToast("Error downloading PDF.", "error");
+    }
+  };
+
+  const showUnallottedDiagnostics = (unallotted, placed) => {
+    const classCounts = {};
+    const increment = (s) => {
+      const key = `${s.dept} Sem ${s.sem}`;
+      classCounts[key] = (classCounts[key] || 0) + 1;
+    };
+    
+    placed.forEach(a => a.student && increment(a.student));
+    unallotted.forEach(increment);
+
+    const classes = Object.keys(classCounts);
+    let recommendation = "";
+    
+    if (classes.length === 1) {
+      const cls = classes[0];
+      const count = classCounts[cls];
+      recommendation = `Since all ${count} students belong to the same class (${cls}), they cannot sit horizontally next to each other.
+      
+👉 Recommendation: You need at least ${count} empty (gap) seats interleaved horizontally to place them, or you should schedule another class of similar size to act as a buffer.`;
+    } else if (classes.length > 1) {
+      let maxClass = "";
+      let maxCount = 0;
+      let otherSum = 0;
+      
+      classes.forEach(cls => {
+        if (classCounts[cls] > maxCount) {
+          maxCount = classCounts[cls];
+          maxClass = cls;
+        }
+      });
+      
+      classes.forEach(cls => {
+        if (cls !== maxClass) {
+          otherSum += classCounts[cls];
+        }
+      });
+
+      const gapNeeded = maxCount - otherSum;
+
+      if (gapNeeded > 0) {
+        recommendation = `The students of ${maxClass} (${maxCount}) outnumber all other classes combined (${otherSum}) by ${gapNeeded}.
+        
+👉 Recommendation: You need at least ${gapNeeded} empty (gap) seats interleaved horizontally to place the remaining students of ${maxClass}, or you should schedule other classes with a total of at least ${gapNeeded} students to act as a buffer.`;
+      } else {
+        recommendation = `Your classes are relatively balanced, but there are not enough physical seats in the selected classrooms to accommodate all students.
+        
+👉 Recommendation: Please add more classrooms (exam halls), increase the rows/columns of existing halls, or reduce the number of student combinations scheduled in this slot.`;
+      }
+    }
+
+    setDialog({
+      isOpen: true,
+      type: "unallotted-alert",
+      title: "⚠️ Unallotted Students Alert",
+      message: `Warning: ${unallotted.length} students could not be placed in any classrooms and have been moved to the Staging Bucket.\n\n📊 Diagnostic Analysis:\n${recommendation}`,
+      unallottedStudents: unallotted,
+      onConfirm: () => closeDialog()
+    });
+  };
 
   async function downloadCSV() {
     try {
@@ -2734,6 +2963,8 @@ export default function App() {
       }>
         <SuperadminDashboard token={token} onLogout={logout} showToast={showToast} />
         <ToastContainer toasts={toasts} />
+        {/* Tawk.to Live Chat Support Widget */}
+        <TawkChat />
       </React.Suspense>
     );
   }
@@ -2800,6 +3031,8 @@ export default function App() {
           </div>
         )}
         <ToastContainer toasts={toasts} />
+        {/* Tawk.to Live Chat Support Widget */}
+        <TawkChat />
       </>
     );
   }
@@ -2852,6 +3085,8 @@ export default function App() {
           </div>
         )}
         <ToastContainer toasts={toasts} />
+        {/* Tawk.to Live Chat Support Widget */}
+        <TawkChat />
       </>
     );
   }
@@ -3108,7 +3343,36 @@ export default function App() {
 
       {/* Floating Staging Bucket Sidebar */}
       <React.Suspense fallback={null}>
-        {/* Staging Bucket component is removed. */}
+        <StagingBucket
+          isLoggedIn={isLoggedIn}
+          showBucketSidebar={showBucketSidebar}
+          setShowBucketSidebar={setShowBucketSidebar}
+          bucket={bucket}
+          searchRoll={searchRoll}
+          setSearchRoll={setSearchRoll}
+          handleSearchStudent={handleSearchStudent}
+          isSearching={isSearching}
+          bucketFilterKey={bucketFilterKey}
+          setBucketFilterKey={setBucketFilterKey}
+          bucketFilterVal={bucketFilterVal}
+          setBucketFilterVal={setBucketFilterVal}
+          uniqueBucketValues={uniqueBucketValues}
+          bucketFilter={bucketFilter}
+          setBucketFilter={setBucketFilter}
+          dragOverBucket={dragOverBucket}
+          setDragOverBucket={setDragOverBucket}
+          handleDragStartBucket={handleDragStartBucket}
+          setIsDraggingStudent={setIsDraggingStudent}
+          handleDropOnBucket={handleDropOnBucket}
+          userRole={userRole}
+          getFieldLabel={getFieldLabel}
+          selectedStudentForMove={selectedStudentForMove}
+          handleTapStudent={handleTapStudent}
+          handleTapBucket={handleTapBucket}
+          handleAssignClick={handleAssignClick}
+          handleClearBucket={handleClearBucket}
+          onDownloadRemainingPDF={downloadRemainingStudentsPDF}
+        />
 
         {/* Spacing Layout Settings Dialog */}
         <DistancingModal
@@ -3147,6 +3411,7 @@ export default function App() {
         dialog={dialog}
         bucketLength={bucket.length}
         onClose={closeDialog}
+        onDownloadRemainingPDF={downloadRemainingStudentsPDF}
       />
 
       {/* Global Toast Alerts */}

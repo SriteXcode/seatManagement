@@ -54,7 +54,19 @@ export const register = async (req, res) => {
         if (!existing) codeExists = false;
       }
 
-      const user = new User({ username, passwordHash, role: "admin", name, email, phone, address, orgName, adminCode, isApproved: true });
+      const user = new User({ 
+        username, 
+        passwordHash, 
+        role: "admin", 
+        name, 
+        email, 
+        phone, 
+        address, 
+        orgName, 
+        adminCode, 
+        isApproved: true,
+        tawkDepartment: orgName.trim() 
+      });
       await user.save();
       return res.status(201).json({ ok: true, message: "Admin registered. Code: " + adminCode, adminCode });
     } else if (role === "staff") {
@@ -81,4 +93,111 @@ export const setupAdmin = async (req, res) => {
   const u = new User({ username, passwordHash: hash, role: "admin", isApproved: true });
   await u.save();
   res.json({ ok: true });
+};
+
+export const getTawkConfig = async (req, res) => {
+  try {
+    const role = req.user.role;
+    let propertyId = "";
+    let widgetId = "";
+    let department = "";
+
+    if (role === "superadmin") {
+      const superadmin = await User.findOne({ role: "superadmin" }).lean();
+      if (superadmin) {
+        propertyId = superadmin.tawkPropertyId || "";
+        widgetId = superadmin.tawkWidgetId || "default";
+        department = superadmin.tawkDepartment || "";
+      }
+    } else {
+      const orgCode = req.user.adminCode;
+      if (!orgCode) return res.status(400).json({ error: "Organization code is missing from authentication token" });
+
+      const admin = await User.findOne({ adminCode: orgCode, role: "admin" }).lean();
+      propertyId = admin?.tawkPropertyId || "";
+      widgetId = admin?.tawkWidgetId || "";
+      department = admin?.tawkDepartment || "";
+
+      // Fallback to superadmin if local admin has not set up chat
+      if (!propertyId) {
+        const superadmin = await User.findOne({ role: "superadmin" }).lean();
+        if (superadmin) {
+          propertyId = superadmin.tawkPropertyId || "";
+          widgetId = superadmin.tawkWidgetId || "default";
+          department = department || superadmin.tawkDepartment || "";
+        }
+      }
+    }
+
+    res.json({
+      tawkPropertyId: propertyId,
+      tawkWidgetId: widgetId,
+      tawkDepartment: department
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const saveTawkConfig = async (req, res) => {
+  try {
+    const role = req.user.role;
+    let query = {};
+
+    if (role === "superadmin") {
+      query = { role: "superadmin" };
+    } else if (role === "admin") {
+      const orgCode = req.user.adminCode;
+      if (!orgCode) return res.status(400).json({ error: "Organization code is missing from authentication token" });
+      query = { adminCode: orgCode, role: "admin" };
+    } else {
+      return res.status(403).json({ error: "Permission denied. Only admins and superadmins can configure chat settings." });
+    }
+
+    const { tawkPropertyId, tawkWidgetId, tawkDepartment } = req.body;
+
+    const result = await User.findOneAndUpdate(
+      query,
+      { 
+        tawkPropertyId: (tawkPropertyId || "").trim(), 
+        tawkWidgetId: (tawkWidgetId || "default").trim(),
+        tawkDepartment: (tawkDepartment || "").trim() 
+      },
+      { returnDocument: "after" }
+    ).lean();
+
+    if (!result) return res.status(404).json({ error: "User configuration not found" });
+
+    res.json({
+      ok: true,
+      tawkPropertyId: result.tawkPropertyId,
+      tawkWidgetId: result.tawkWidgetId,
+      tawkDepartment: result.tawkDepartment
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const getPublicTawkConfig = async (req, res) => {
+  try {
+    const superadmin = await User.findOne({ role: "superadmin" }).lean();
+    let propertyId = "";
+    let widgetId = "";
+    let department = "";
+
+    if (superadmin) {
+      propertyId = superadmin.tawkPropertyId || "";
+      widgetId = superadmin.tawkWidgetId || "default";
+      department = superadmin.tawkDepartment || "";
+    }
+
+    res.json({
+      tawkPropertyId: propertyId,
+      tawkWidgetId: widgetId,
+      tawkDepartment: department
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 };

@@ -29,6 +29,7 @@ export default function StagingBucket({
   handleTapBucket,
   handleAssignClick,
   handleClearBucket,
+  onDownloadRemainingPDF,
 }) {
   if (!isLoggedIn) return null;
 
@@ -176,6 +177,20 @@ export default function StagingBucket({
                 className="w-full border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-xs bg-white text-black focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all font-semibold shadow-2xs placeholder-gray-400"
               />
             </div>
+          </div>
+        )}
+
+        {bucket.length > 0 && (
+          <div className="px-4 py-2 border-b border-gray-150 bg-red-50/15 flex justify-between items-center select-none animate-fadeIn">
+            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Unallotted Roster</span>
+            <button
+              onClick={() => onDownloadRemainingPDF(bucket)}
+              className="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-bold px-3 py-1.5 rounded-lg text-[10px] transition-all cursor-pointer flex items-center gap-1 hover:scale-105 active:scale-95"
+              title="Download unallotted students PDF"
+            >
+              <i className="las la-file-pdf text-xs"></i>
+              Download Roster PDF
+            </button>
           </div>
         )}
 

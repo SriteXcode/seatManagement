@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { api } from "../../services/api";
+import TawkChat from "../TawkChat";
 
 export default function PublicRegistration({ orgCode, formId, examType, showToast }) {
   const [step, setStep] = useState(1); // 1: Enter, 2: Verify, 3: Success
@@ -9,6 +10,9 @@ export default function PublicRegistration({ orgCode, formId, examType, showToas
   const [orgName, setOrgName] = useState("Institution");
   const [formData, setFormData] = useState({});
   const [errors, setErrors] = useState({});
+  const [tawkPropertyId, setTawkPropertyId] = useState("");
+  const [tawkWidgetId, setTawkWidgetId] = useState("default");
+  const [tawkDepartment, setTawkDepartment] = useState("");
 
   useEffect(() => {
     const fetchPublicConfig = async () => {
@@ -19,6 +23,11 @@ export default function PublicRegistration({ orgCode, formId, examType, showToas
           : await api.getPublicFormConfig(orgCode, examType);
         setFormConfig(data);
         setOrgName(data.orgName || "Institution");
+        if (data.tawkPropertyId) {
+          setTawkPropertyId(data.tawkPropertyId);
+          setTawkWidgetId(data.tawkWidgetId || "default");
+          setTawkDepartment(data.tawkDepartment || "");
+        }
         
         // Initialize form data fields
         if (data.fields) {
@@ -366,6 +375,8 @@ export default function PublicRegistration({ orgCode, formId, examType, showToas
       <footer className="text-center text-[10px] text-gray-400 font-bold pt-12 print:hidden select-none">
         Exam Seating Management System • Secure Client Registration
       </footer>
+      {/* Tawk.to Live Chat Support Widget */}
+      <TawkChat customPropertyId={tawkPropertyId} customWidgetId={tawkWidgetId} customDepartment={tawkDepartment} />
     </div>
   );
 }

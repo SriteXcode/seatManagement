@@ -147,6 +147,18 @@ export const getPublicFormConfig = async (req, res) => {
     // Find organization name from Admin User
     const admin = await User.findOne({ adminCode: orgCode, role: "admin" }).lean();
     const orgName = admin ? admin.orgName : "Unknown Institution";
+    let tawkPropertyId = admin?.tawkPropertyId || "";
+    let tawkWidgetId = admin?.tawkWidgetId || "";
+    let tawkDepartment = admin?.tawkDepartment || "";
+
+    if (!tawkPropertyId) {
+      const superadmin = await User.findOne({ role: "superadmin" }).lean();
+      if (superadmin) {
+        tawkPropertyId = superadmin.tawkPropertyId || "";
+        tawkWidgetId = superadmin.tawkWidgetId || "default";
+        tawkDepartment = tawkDepartment || superadmin.tawkDepartment || "";
+      }
+    }
 
     if (!config) {
       // If admin hasn't created a FormConfig yet, return standard inactive response with default fields
@@ -157,13 +169,19 @@ export const getPublicFormConfig = async (req, res) => {
         title: `${examType} Registration Form`,
         description: `Registration is not configured or active for this exam type.`,
         isActive: false,
-        fields: []
+        fields: [],
+        tawkPropertyId,
+        tawkWidgetId,
+        tawkDepartment
       });
     }
 
     res.json({
       ...config,
-      orgName
+      orgName,
+      tawkPropertyId,
+      tawkWidgetId,
+      tawkDepartment
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -376,10 +394,25 @@ export const getPublicFormConfigById = async (req, res) => {
 
     const admin = await User.findOne({ adminCode: orgCode, role: "admin" }).lean();
     const orgName = admin ? admin.orgName : "Unknown Institution";
+    let tawkPropertyId = admin?.tawkPropertyId || "";
+    let tawkWidgetId = admin?.tawkWidgetId || "";
+    let tawkDepartment = admin?.tawkDepartment || "";
+
+    if (!tawkPropertyId) {
+      const superadmin = await User.findOne({ role: "superadmin" }).lean();
+      if (superadmin) {
+        tawkPropertyId = superadmin.tawkPropertyId || "";
+        tawkWidgetId = superadmin.tawkWidgetId || "default";
+        tawkDepartment = tawkDepartment || superadmin.tawkDepartment || "";
+      }
+    }
 
     res.json({
       ...config,
-      orgName
+      orgName,
+      tawkPropertyId,
+      tawkWidgetId,
+      tawkDepartment
     });
   } catch (e) {
     res.status(500).json({ error: e.message });

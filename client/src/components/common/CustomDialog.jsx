@@ -1,15 +1,15 @@
 import React from "react";
 
-export default function CustomDialog({ dialog, bucketLength, onClose }) {
+export default function CustomDialog({ dialog, bucketLength, onClose, onDownloadRemainingPDF }) {
   if (!dialog || !dialog.isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 max-w-md w-full p-6 animate-scaleIn mx-4">
+      <div className={`bg-white rounded-2xl shadow-2xl border border-gray-100 w-full p-6 animate-scaleIn mx-4 ${dialog.type === 'unallotted-alert' ? 'max-w-lg' : 'max-w-md'}`}>
         <h3 className="text-sm font-bold text-gray-800 border-b border-gray-100 pb-3">{dialog.title}</h3>
         
         <div className="mt-4">
-          {dialog.message && (
+          {dialog.message && dialog.type !== 'unallotted-alert' && (
             <p className="text-xs text-gray-600 mb-4 whitespace-pre-line leading-relaxed">
               {dialog.message}
             </p>
@@ -114,6 +114,48 @@ export default function CustomDialog({ dialog, bucketLength, onClose }) {
                   </option>
                 ))}
               </select>
+            </div>
+          )}
+
+          {dialog.type === 'unallotted-alert' && (
+            <div className="mt-4 space-y-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 space-y-2 text-[11px] text-amber-800 font-semibold select-none leading-relaxed">
+                <div className="font-extrabold text-xs flex items-center gap-1.5 text-amber-900">
+                  <i className="las la-exclamation-triangle text-base text-amber-600"></i>
+                  ALLOTMENT DIAGNOSTICS & RECOMMENDATIONS
+                </div>
+                <p className="whitespace-pre-line leading-relaxed">{dialog.message}</p>
+              </div>
+
+              <div>
+                <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Unallotted Student List ({dialog.unallottedStudents?.length})</h4>
+                <div className="border border-gray-150 rounded-xl max-h-36 overflow-y-auto divide-y divide-gray-100 bg-gray-50/50">
+                  {dialog.unallottedStudents?.map(s => (
+                    <div key={s._id} className="p-2 flex items-center justify-between text-[10px] font-semibold">
+                      <div className="min-w-0 pr-2">
+                        <div className="text-gray-800 font-bold truncate">{s.roll}</div>
+                        <div className="text-gray-500 text-[9px] truncate">{s.name}</div>
+                      </div>
+                      <span className="px-2 py-0.5 bg-red-50 text-red-750 border border-red-100 rounded-md text-[9px] uppercase font-bold tracking-wider shrink-0">
+                        {s.dept} | Sem {s.sem}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (onDownloadRemainingPDF) {
+                    onDownloadRemainingPDF(dialog.unallottedStudents);
+                  }
+                }}
+                className="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer hover:scale-[1.02] active:scale-98"
+              >
+                <i className="las la-file-pdf text-sm"></i>
+                Download Unallotted Roster PDF
+              </button>
             </div>
           )}
 

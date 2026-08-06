@@ -116,9 +116,22 @@ export const generate = async (req, res) => {
       };
     });
 
-    if (docs.length) await Allotment.insertMany(docs);
-    console.log(`[Backend Generate] Inserted allotments count:`, docs.length);
-    res.json({ ok: true, count: docs.length, notPlaced: [] });
+    const notPlacedDocs = notPlaced.map(s => {
+      const matchingCombo = deptSemCombinations.find(combo => combo.dept === s.dept && String(combo.sem) === String(s.sem));
+      const allotmentSubject = (matchingCombo ? matchingCombo.subject : "") || (Array.isArray(s.subject) ? s.subject[0] : s.subject) || "";
+      
+      return {
+        student: s._id, room: null, row: null, col: null, seatCode: "", shift: Number(shift),
+        date, time, subject: allotmentSubject, seatLabel: "Staging Bucket",
+        useDistancing: Boolean(useDistancing), rowGrouping: Number(rowGrouping) || 0, colGrouping: Number(colGrouping) || 0,
+        gapType: gapType || "", gapAction: gapAction || "", orgCode: req.user.adminCode
+      };
+    });
+
+    const allDocs = [...docs, ...notPlacedDocs];
+    if (allDocs.length) await Allotment.insertMany(allDocs);
+    console.log(`[Backend Generate] Inserted allotments count: ${docs.length}, and unallotted count: ${notPlacedDocs.length}`);
+    res.json({ ok: true, count: docs.length, notPlaced: notPlaced.map(s => s.roll) });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
