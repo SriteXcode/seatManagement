@@ -5,31 +5,11 @@ import InvigAssignment from "../models/InvigAssignment.js";
 import { generateAllotments as generateAlgo } from "../services/seatGenerator.js";
 
 
-const cleanupDeletedStudents = async (studentIds, orgCode) => {
-  try {
-    if (!studentIds || studentIds.length === 0) return;
-
-    const remainingStudentIds = await Allotment.find({
-      student: { $in: studentIds },
-      orgCode
-    }).distinct("student");
-    const remainingSet = new Set(remainingStudentIds.map(id => String(id)));
-
-    const toDeleteIds = studentIds.filter(id => !remainingSet.has(String(id)));
-
-    if (toDeleteIds.length > 0) {
-      await Student.deleteMany({ _id: { $in: toDeleteIds }, orgCode });
-    }
-  } catch (error) {
-    console.error("Error cleaning up deleted students:", error);
-  }
-};
-
 export const generate = async (req, res) => {
   try {
     const shift = Number(req.body.shift) || 1;
     const seed = Number(req.body.seed || 1);
-    const { date, time, examType, useDistancing, rowGrouping, colGrouping, excludeStudentIds, gapType, gapAction } = req.body;
+    const { date, time, examType, useDistancing, rowGrouping, colGrouping, excludeStudentIds, gapType, gapAction, arrangementMode, patternMode } = req.body;
     const deptSemCombinations = req.body.deptSemCombinations || req.body.combinations;
 
     if (!date) return res.status(400).json({ error: "Date is required" });
@@ -100,7 +80,9 @@ export const generate = async (req, res) => {
       students, rooms, shift, seed, occupied: blockers,
       useDistancing: Boolean(useDistancing && gapAction === 'remove-seats'),
       rowGrouping: Number(rowGrouping) || 0,
-      colGrouping: Number(colGrouping) || 0
+      colGrouping: Number(colGrouping) || 0,
+      arrangementMode: arrangementMode || "loose",
+      patternMode: patternMode || "scrambled"
     });
     console.log(`[Backend Generate] Algo output - allotments: ${generatedAllotments.length}, notPlaced: ${notPlaced.length}`);
 
@@ -112,7 +94,9 @@ export const generate = async (req, res) => {
         student: a.student._id, room: a.room._id, row: a.row, col: a.col, seatCode: a.seatCode, shift: a.shift,
         date, time, subject: allotmentSubject, seatLabel: `${a.room.name}.-${a.seatCode}-StudentRollno(${a.student.roll})`,
         useDistancing: Boolean(useDistancing), rowGrouping: Number(rowGrouping) || 0, colGrouping: Number(colGrouping) || 0,
-        gapType: gapType || "", gapAction: gapAction || "", orgCode: req.user.adminCode
+        gapType: gapType || "", gapAction: gapAction || "",
+        arrangementMode: arrangementMode || "loose", patternMode: patternMode || "scrambled",
+        orgCode: req.user.adminCode
       };
     });
 
@@ -124,7 +108,9 @@ export const generate = async (req, res) => {
         student: s._id, room: null, row: null, col: null, seatCode: "", shift: Number(shift),
         date, time, subject: allotmentSubject, seatLabel: "Staging Bucket",
         useDistancing: Boolean(useDistancing), rowGrouping: Number(rowGrouping) || 0, colGrouping: Number(colGrouping) || 0,
-        gapType: gapType || "", gapAction: gapAction || "", orgCode: req.user.adminCode
+        gapType: gapType || "", gapAction: gapAction || "",
+        arrangementMode: arrangementMode || "loose", patternMode: patternMode || "scrambled",
+        orgCode: req.user.adminCode
       };
     });
 
@@ -140,7 +126,8 @@ export const generate = async (req, res) => {
 export const regenerate = async (req, res) => {
   try {
     const shift = Number(req.body.shift) || 1;
-    const { date, seed, useDistancing, rowGrouping, colGrouping, gapType, gapAction } = req.body;
+    const seed = Number(req.body.seed || 1);
+    const { date, useDistancing, rowGrouping, colGrouping, gapType, gapAction, arrangementMode, patternMode } = req.body;
     if (!date) return res.status(400).json({ error: "Date is required" });
 
     // Find all existing allotments for this date and shift to get their student combinations
@@ -163,10 +150,64 @@ export const regenerate = async (req, res) => {
     }
     const deptSemCombinations = Object.values(comboMap);
 
-    // Override req.body params so that generate controller receives them
-    req.body.examType = examType;
-    req.body.deptSemCombinations = deptSemCombinations;
-    return generate(req, res);
+    // Delete ALL existing allotments for this slot so regeneration starts completely from scratch
+    await Allotment.deleteMany({ shift, date, orgCode: req.user.adminCode });
+
+    const rooms = await Room.find({ orgCode: req.user.adminCode }).lean();
+
+    const query = { 
+      examType,
+      orgCode: req.user.adminCode,
+      $or: deptSemCombinations.map(combo => ({
+        dept: combo.dept,
+        sem: combo.sem,
+        ...(combo.subject ? { $or: [{ subject: combo.subject }, { subject: [] }, { subject: "" }, { subject: null }, { subject: { $exists: false } }] } : {})
+      })) 
+    };
+
+    let students = await Student.find(query).lean();
+
+    const { allotments: generatedAllotments, notPlaced } = generateAlgo({ 
+      students, rooms, shift, seed, occupied: [],
+      useDistancing: Boolean(useDistancing && gapAction === 'remove-seats'),
+      rowGrouping: Number(rowGrouping) || 0,
+      colGrouping: Number(colGrouping) || 0,
+      arrangementMode: arrangementMode || "loose",
+      patternMode: patternMode || "scrambled"
+    });
+
+    const docs = generatedAllotments.map(a => {
+      const matchingCombo = deptSemCombinations.find(combo => combo.dept === a.student.dept && String(combo.sem) === String(a.student.sem));
+      const allotmentSubject = (matchingCombo ? matchingCombo.subject : "") || (Array.isArray(a.student.subject) ? a.student.subject[0] : a.student.subject) || "";
+      
+      return {
+        student: a.student._id, room: a.room._id, row: a.row, col: a.col, seatCode: a.seatCode, shift: a.shift,
+        date, time: a.time || "", subject: allotmentSubject, seatLabel: `${a.room.name}.-${a.seatCode}-StudentRollno(${a.student.roll})`,
+        useDistancing: Boolean(useDistancing), rowGrouping: Number(rowGrouping) || 0, colGrouping: Number(colGrouping) || 0,
+        gapType: gapType || "", gapAction: gapAction || "",
+        arrangementMode: arrangementMode || "loose", patternMode: patternMode || "scrambled",
+        orgCode: req.user.adminCode
+      };
+    });
+
+    const notPlacedDocs = notPlaced.map(s => {
+      const matchingCombo = deptSemCombinations.find(combo => combo.dept === s.dept && String(combo.sem) === String(s.sem));
+      const allotmentSubject = (matchingCombo ? matchingCombo.subject : "") || (Array.isArray(s.subject) ? s.subject[0] : s.subject) || "";
+      
+      return {
+        student: s._id, room: null, row: null, col: null, seatCode: "", shift: Number(shift),
+        date, time: "", subject: allotmentSubject, seatLabel: "Staging Bucket",
+        useDistancing: Boolean(useDistancing), rowGrouping: Number(rowGrouping) || 0, colGrouping: Number(colGrouping) || 0,
+        gapType: gapType || "", gapAction: gapAction || "",
+        arrangementMode: arrangementMode || "loose", patternMode: patternMode || "scrambled",
+        orgCode: req.user.adminCode
+      };
+    });
+
+    const allDocs = [...docs, ...notPlacedDocs];
+    if (allDocs.length) await Allotment.insertMany(allDocs);
+
+    return res.json({ ok: true, count: docs.length, notPlaced: notPlaced.map(s => s.roll) });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -202,11 +243,6 @@ export const saveManual = async (req, res) => {
       });
       await Allotment.insertMany(docs);
     }
-
-    if (oldStudentIds.length > 0) {
-      await cleanupDeletedStudents(oldStudentIds, req.user.adminCode);
-    }
-
     res.json({ ok: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -345,7 +381,20 @@ export const getSchedules = async (req, res) => {
       if (!a.date || !a.shift) continue;
       const key = `${a.date}_${a.shift}`;
       if (!groups[key]) {
-        groups[key] = { date: a.date, shift: a.shift, times: new Set(), subjects: new Set(), examTypes: new Set(), depts: new Set(), sems: new Set(), sections: new Set(), combinations: [], combinationKeys: new Set() };
+        groups[key] = { 
+          date: a.date, 
+          shift: a.shift, 
+          times: new Set(), 
+          subjects: new Set(), 
+          examTypes: new Set(), 
+          depts: new Set(), 
+          sems: new Set(), 
+          sections: new Set(), 
+          combinations: [], 
+          combinationKeys: new Set(),
+          arrangementMode: a.arrangementMode || "loose",
+          patternMode: a.patternMode || "scrambled"
+        };
       }
       const g = groups[key];
       if (a.time) g.times.add(a.time);
@@ -371,7 +420,9 @@ export const getSchedules = async (req, res) => {
       subject: Array.from(g.subjects).filter(Boolean).join(", "),
       examType: Array.from(g.examTypes).filter(Boolean).join(", ") || "College",
       depts: Array.from(g.depts).filter(Boolean), sems: Array.from(g.sems).filter(Boolean),
-      sections: Array.from(g.sections).filter(Boolean), subjects: Array.from(g.subjects).filter(Boolean), combinations: g.combinations
+      sections: Array.from(g.sections).filter(Boolean), subjects: Array.from(g.subjects).filter(Boolean), combinations: g.combinations,
+      arrangementMode: g.arrangementMode || "loose",
+      patternMode: g.patternMode || "scrambled"
     }));
     result.sort((a, b) => a.date !== b.date ? a.date.localeCompare(b.date) : a.shift - b.shift);
     res.json(result);
@@ -386,14 +437,8 @@ export const deleteSchedule = async (req, res) => {
     const date = req.query.date;
     if (!date || !shift) return res.status(400).json({ error: "Date and Shift are required" });
 
-    const studentIds = await Allotment.find({ shift, date, orgCode: req.user.adminCode }).distinct("student");
-
     await Allotment.deleteMany({ shift, date, orgCode: req.user.adminCode });
     await InvigAssignment.deleteMany({ shift, date, orgCode: req.user.adminCode });
-
-    if (studentIds.length > 0) {
-      await cleanupDeletedStudents(studentIds, req.user.adminCode);
-    }
 
     res.json({ ok: true });
   } catch (error) {
@@ -493,8 +538,6 @@ export const updateSchedule = async (req, res) => {
             orgCode: req.user.adminCode
           }).distinct("student");
 
-          deletedStudentIds.push(...matchingAllotments);
-
           await Allotment.deleteMany({
             date,
             shift: Number(shift),
@@ -503,10 +546,6 @@ export const updateSchedule = async (req, res) => {
             orgCode: req.user.adminCode
           });
         }
-      }
-
-      if (deletedStudentIds.length > 0) {
-        await cleanupDeletedStudents(deletedStudentIds, req.user.adminCode);
       }
 
       const combosToAdd = combinations.filter(c => {

@@ -327,7 +327,27 @@ export default function StagingBucket({
                           <div className="text-[10px] font-bold text-red-700 bg-red-50/50 border border-red-100 rounded-md px-2 py-0.5 uppercase tracking-wider select-none max-w-full whitespace-normal break-all shrink-0">
                             {student.dept} | {getFieldLabel('constraint_2')}: {student.sem}
                           </div>
-                          {prevSeat && (
+                          {student.schedules && student.schedules.length > 0 ? (
+                            <div className="w-full space-y-1.5 mt-1 select-none">
+                              {student.schedules.length > 1 && (
+                                <div className="text-[10px] font-extrabold text-purple-700 bg-purple-50 border border-purple-200 rounded-md px-2 py-0.5 uppercase tracking-wider inline-flex items-center gap-1">
+                                  <i className="las la-layer-group text-xs"></i> Staged in {student.schedules.length} Schedules
+                                </div>
+                              )}
+                              <div className="flex flex-wrap gap-1">
+                                {student.schedules.map((sch, sIdx) => (
+                                  <span 
+                                    key={sIdx} 
+                                    className="text-[9px] font-bold text-gray-700 bg-gray-100 border border-gray-200 rounded-md px-2 py-0.5 flex items-center gap-1 shadow-2xs"
+                                    title={`Subject: ${sch.subject || 'N/A'}`}
+                                  >
+                                    <i className="las la-calendar text-xs text-red-600"></i>
+                                    {sch.date} (S{sch.shift}){sch.subject ? ` — ${sch.subject}` : ''}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          ) : prevSeat ? (
                             <>
                               <div className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-100 rounded-md px-2 py-0.5 uppercase tracking-wider select-none max-w-full whitespace-normal break-all shrink-0" title={`Previously allotted to Room ${prevSeat.roomName}`}>
                                 Class Name: {prevSeat.roomName}
@@ -339,7 +359,7 @@ export default function StagingBucket({
                                 Schedule: {prevSeat.date} (S{prevSeat.shift})
                               </div>
                             </>
-                          )}
+                          ) : null}
                         </div>
                       </div>
                       {userRole === "admin" && (

@@ -72,6 +72,10 @@ export default function AllotmentTab({
   deleteSchedule,
   updateSchedule,
   allStudents = [],
+  arrangementMode = "loose",
+  patternMode = "scrambled",
+  setShowGenerateModal,
+  loading = false
 }) {
   const getStudentCountForCombo = (combo) => {
     if (!Array.isArray(allStudents)) return 0;
@@ -292,7 +296,16 @@ export default function AllotmentTab({
 
           <div className="flex gap-4 border-t pt-3">
             <div className="w-full">
-              <h4 className="font-semibold text-sm">Select {getFieldLabel('constraint_1')}-{getFieldLabel('constraint_2')} Combinations</h4>
+              <div className="flex items-center justify-between mb-1">
+                <h4 className="font-semibold text-sm flex items-center gap-2">
+                  Select {getFieldLabel('constraint_1')}-{getFieldLabel('constraint_2')} Combinations
+                  {(loading || !meta || (!meta.depts?.length && !meta.sems?.length)) && (
+                    <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-red-700 bg-red-50 border border-red-150 px-2.5 py-0.5 rounded-full animate-pulse">
+                      <i className="las la-spinner la-spin text-xs"></i> Loading Options...
+                    </span>
+                  )}
+                </h4>
+              </div>
               <div className="flex flex-col sm:flex-row gap-2 mt-2 select-none">
                 <CustomSelect
                   value={selectedDept}
@@ -417,8 +430,16 @@ export default function AllotmentTab({
                       {s.examType || 'College'}
                     </span>
                   </div>
-                  <div className="text-xs font-semibold text-gray-700">
-                    Shift {s.shift} {s.time ? `(${s.time})` : ''}
+                  <div className="text-xs font-semibold text-gray-700 flex items-center justify-between">
+                    <span>Shift {s.shift} {s.time ? `(${s.time})` : ''}</span>
+                    <div className="flex gap-1">
+                      <span className="text-[8px] bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded font-extrabold uppercase">
+                        {s.arrangementMode === 'strict' ? 'Strict' : 'Loose'}
+                      </span>
+                      <span className="text-[8px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-extrabold uppercase">
+                        {s.patternMode === 'linear' ? 'Linear' : 'Scrambled'}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="text-[11px] text-gray-500 mt-2 space-y-1 border-t border-gray-100 pt-2 w-full text-left select-none">
@@ -520,6 +541,24 @@ export default function AllotmentTab({
                         <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-md font-bold uppercase text-[9px] inline-block mt-0.5">
                           {activeSavedSchedule?.examType || 'College'}
                         </span>
+                      </div>
+                    </div>
+
+                    {/* Algorithm Strategy */}
+                    <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-3xs col-span-1 sm:col-span-2">
+                      <div className="p-2 bg-blue-50 text-blue-700 rounded-lg flex items-center justify-center shrink-0">
+                        <i className="las la-cogs text-lg"></i>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block">Algorithm Strategy</span>
+                        <div className="flex flex-wrap gap-1.5 mt-0.5">
+                          <span className="px-2 py-0.5 bg-green-100 text-green-800 rounded-md font-bold uppercase text-[9px]">
+                            {(activeSavedSchedule?.arrangementMode || arrangementMode) === 'strict' ? 'Strict Density (Leave Spaces)' : 'Loose Density (Full Capacity)'}
+                          </span>
+                          <span className="px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded-md font-bold uppercase text-[9px]">
+                            {(activeSavedSchedule?.patternMode || patternMode) === 'linear' ? 'Linear (Column-by-Column)' : 'Scrambled (King\'s Move)'}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>

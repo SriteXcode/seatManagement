@@ -17,6 +17,8 @@ const allotSchema = new mongoose.Schema({
   colGrouping: { type: Number, default: 0 },
   gapType: { type: String, default: "" },
   gapAction: { type: String, default: "" },
+  arrangementMode: { type: String, default: "loose" },
+  patternMode: { type: String, default: "scrambled" },
   orgCode: { type: String, required: true }
 }, { timestamps: true });
 

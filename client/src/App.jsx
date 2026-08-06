@@ -20,6 +20,7 @@ const RoomsTab = React.lazy(() => import("./components/rooms/RoomsTab"));
 const AllotmentTab = React.lazy(() => import("./components/allotments/AllotmentTab"));
 const StagingBucket = React.lazy(() => import("./components/allotments/StagingBucket"));
 const DistancingModal = React.lazy(() => import("./components/allotments/DistancingModal"));
+const GenerateOptionsModal = React.lazy(() => import("./components/allotments/GenerateOptionsModal"));
 const ProfileTab = React.lazy(() => import("./components/profile/ProfileTab"));
 const FormBuilderTab = React.lazy(() => import("./components/students/FormBuilderTab"));
 const PublicRegistration = React.lazy(() => import("./components/students/PublicRegistration"));
@@ -96,6 +97,11 @@ export default function App() {
   const [previewRoomId, setPreviewRoomId] = useState("");
   const [gapType, setGapType] = useState("empty-seat");
   const [gapAction, setGapAction] = useState("remove-seats");
+
+  // Algorithm configuration states (Loose vs Strict arrangement, Scrambled vs Linear pattern)
+  const [arrangementMode, setArrangementMode] = useState("loose");
+  const [patternMode, setPatternMode] = useState("scrambled");
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
 
   // Visual filters & previews
   const [filters, setFilters] = useState(null);
@@ -582,6 +588,48 @@ export default function App() {
     }
   }
 
+  const processStagingBucket = (stagedAllotments) => {
+    if (!Array.isArray(stagedAllotments) || stagedAllotments.length === 0) return [];
+
+    const studentMap = {};
+
+    for (const a of stagedAllotments) {
+      if (!a.student) continue;
+      const studentObj = a.student;
+      const sId = String(studentObj._id || studentObj.roll);
+
+      if (!studentMap[sId]) {
+        studentMap[sId] = {
+          ...studentObj,
+          previousSeat: studentObj.metadata && studentObj.metadata.previousRoomName ? {
+            roomName: studentObj.metadata.previousRoomName,
+            seatLabel: studentObj.metadata.previousSeatLabel,
+            date: studentObj.metadata.previousDate,
+            shift: studentObj.metadata.previousShift
+          } : null,
+          schedules: []
+        };
+      }
+
+      const schedInfo = {
+        allotmentId: a._id,
+        date: a.date,
+        shift: a.shift,
+        subject: a.subject || (Array.isArray(studentObj.subject) ? studentObj.subject[0] : studentObj.subject) || ""
+      };
+
+      const exists = studentMap[sId].schedules.some(
+        s => String(s.date) === String(schedInfo.date) && Number(s.shift) === Number(schedInfo.shift) && s.subject === schedInfo.subject
+      );
+
+      if (!exists) {
+        studentMap[sId].schedules.push(schedInfo);
+      }
+    }
+
+    return Object.values(studentMap);
+  };
+
   async function fetchAllotments() {
     if (!token || userRole === "superadmin") return;
     try {
@@ -591,20 +639,7 @@ export default function App() {
         const staged = data.filter(a => !a.room);
 
         setAllotments(placed);
-
-        const stagedStudents = staged.map(a => {
-          if (!a.student) return null;
-          const student = a.student;
-          return {
-            ...student,
-            previousSeat: student.metadata && student.metadata.previousRoomName ? {
-              roomName: student.metadata.previousRoomName,
-              seatLabel: student.metadata.previousSeatLabel,
-              date: student.metadata.previousDate,
-              shift: student.metadata.previousShift
-            } : null
-          };
-        }).filter(Boolean);
+        const stagedStudents = processStagingBucket(staged);
         setBucket(stagedStudents);
 
         const comboMap = {};
@@ -630,6 +665,8 @@ export default function App() {
           if (first.colGrouping !== undefined) setColGrouping(first.colGrouping);
           if (first.gapType !== undefined) setGapType(first.gapType);
           if (first.gapAction !== undefined) setGapAction(first.gapAction);
+          if (first.arrangementMode) setArrangementMode(first.arrangementMode);
+          if (first.patternMode) setPatternMode(first.patternMode);
           setIsLayoutSettingsLocked(true);
         } else {
           setIsLayoutSettingsLocked(false);
@@ -2184,12 +2221,41 @@ export default function App() {
   };
 
   // CAPACITY ALLOTMENT GENERATION & PDF DOWNLOADS
-  async function generate() {
+  const [generateModalMode, setGenerateModalMode] = useState("generate"); // "generate" | "regenerate"
+
+  const handleOpenGenerateModal = () => {
     if (deptSemCombinations.length === 0) {
       showToast("Select at least one combination first.", "warning");
       return;
     }
-    
+    setGenerateModalMode("generate");
+    setShowGenerateModal(true);
+  };
+
+  const handleOpenRegenerateModal = () => {
+    if (!date || !shift) {
+      showToast("Date and Shift are required.", "error");
+      return;
+    }
+    setGenerateModalMode("regenerate");
+    setShowGenerateModal(true);
+  };
+
+  const handleConfirmGenerateModal = ({ arrangementMode: chosenArrangement, patternMode: chosenPattern }) => {
+    setArrangementMode(chosenArrangement);
+    setPatternMode(chosenPattern);
+    if (generateModalMode === "regenerate") {
+      executeRegeneration(chosenArrangement, chosenPattern);
+    } else {
+      executeGeneration(chosenArrangement, chosenPattern);
+    }
+  };
+
+  async function generate() {
+    handleOpenGenerateModal();
+  }
+
+  const executeGeneration = async (chosenArrangement = arrangementMode, chosenPattern = patternMode) => {
     const hasPrevious = allotments.length > 0;
 
     const action = async (includeBucket = true) => {
@@ -2206,6 +2272,8 @@ export default function App() {
           colGrouping,
           gapType,
           gapAction,
+          arrangementMode: chosenArrangement,
+          patternMode: chosenPattern,
           excludeStudentIds: includeBucket ? [] : bucket.map(s => s._id),
           examType: selectedExamType
         }, token);
@@ -2220,20 +2288,7 @@ export default function App() {
             const staged = data.filter(a => !a.room);
 
             setAllotments(placed);
-
-            const stagedStudents = staged.map(a => {
-              if (!a.student) return null;
-              const student = a.student;
-              return {
-                ...student,
-                previousSeat: student.metadata && student.metadata.previousRoomName ? {
-                  roomName: student.metadata.previousRoomName,
-                  seatLabel: student.metadata.previousSeatLabel,
-                  date: student.metadata.previousDate,
-                  shift: student.metadata.previousShift
-                } : null
-              };
-            }).filter(Boolean);
+            const stagedStudents = processStagingBucket(staged);
             setBucket(stagedStudents);
 
             fetchSchedules();
@@ -2273,9 +2328,9 @@ export default function App() {
       // Starting fresh: no need to ask about staging bucket since there is no previous layout
       action(true);
     }
-  }
+  };
 
-  async function regenerateSchedule() {
+  const executeRegeneration = async (chosenArrangement = arrangementMode, chosenPattern = patternMode) => {
     setLoading(true);
     try {
       const res = await api.regenerateSchedule({
@@ -2287,10 +2342,12 @@ export default function App() {
         colGrouping,
         gapType,
         gapAction,
+        arrangementMode: chosenArrangement,
+        patternMode: chosenPattern
       }, token);
 
       if (res.ok) {
-        showToast("Arrangement successfully regenerated!", "success");
+        showToast("Arrangement successfully regenerated from scratch!", "success");
         
         const data = await api.getAllotments(shift, date, token);
         if (Array.isArray(data)) {
@@ -2298,22 +2355,10 @@ export default function App() {
           const staged = data.filter(a => !a.room);
 
           setAllotments(placed);
-
-          const stagedStudents = staged.map(a => {
-            if (!a.student) return null;
-            const student = a.student;
-            return {
-              ...student,
-              previousSeat: student.metadata && student.metadata.previousRoomName ? {
-                roomName: student.metadata.previousRoomName,
-                seatLabel: student.metadata.previousSeatLabel,
-                date: student.metadata.previousDate,
-                shift: student.metadata.previousShift
-              } : null
-            };
-          }).filter(Boolean);
+          const stagedStudents = processStagingBucket(staged);
           setBucket(stagedStudents);
 
+          fetchSchedules();
           fetchRoomSchedules();
 
           if (stagedStudents.length > 0) {
@@ -2321,14 +2366,14 @@ export default function App() {
           }
         }
       } else {
-        showToast(res.error || "Regeneration failed.", "error");
+        showToast(res.error || "Regeneration failed", "error");
       }
     } catch (e) {
       showToast("Regeneration failed: " + e.message, "error");
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   async function deleteActiveSchedule() {
     setLoading(true);
@@ -3273,7 +3318,7 @@ export default function App() {
             activeConfig={activeConfig}
             selectedScheduleCombos={selectedScheduleCombos}
             saveToLibrary={saveToLibrary}
-            regenerateSchedule={regenerateSchedule}
+            regenerateSchedule={handleOpenRegenerateModal}
             comments={comments}
             newCommentText={newCommentText}
             setNewCommentText={setNewCommentText}
@@ -3287,6 +3332,7 @@ export default function App() {
             rooms={rooms}
             allotments={allotments}
             allStudents={allStudents}
+            loading={loading}
             invigAssignments={invigAssignments}
             gridForRoom={gridForRoom}
             getFieldLabel={getFieldLabel}
@@ -3306,6 +3352,9 @@ export default function App() {
             handleTapEmptySeat={handleTapEmptySeat}
             deleteSchedule={deleteActiveSchedule}
             updateSchedule={updateActiveSchedule}
+            arrangementMode={arrangementMode}
+            patternMode={patternMode}
+            setShowGenerateModal={setShowGenerateModal}
           />
         </div>
 
@@ -3391,6 +3440,15 @@ export default function App() {
           previewRoomId={previewRoomId}
           setPreviewRoomId={setPreviewRoomId}
           rooms={rooms}
+        />
+
+        {/* Generation Strategy Options Modal */}
+        <GenerateOptionsModal
+          show={showGenerateModal}
+          setShow={setShowGenerateModal}
+          onConfirm={handleConfirmGenerateModal}
+          initialArrangementMode={arrangementMode}
+          initialPatternMode={patternMode}
         />
 
         {/* Student Form Modal */}

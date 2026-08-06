@@ -362,7 +362,19 @@ export default function StudentsTab({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-150 bg-white">
-              {currentStudents.length === 0 ? (
+              {loading ? (
+                Array.from({ length: 5 }).map((_, idx) => (
+                  <tr key={`loading-row-${idx}`} className="animate-pulse">
+                    <td className="px-4 py-3"><div className="h-3.5 bg-gray-200 rounded w-16"></div></td>
+                    <td className="px-4 py-3"><div className="h-3.5 bg-gray-200 rounded w-32"></div></td>
+                    <td className="px-4 py-3"><div className="h-3 bg-red-100/70 rounded w-16"></div></td>
+                    <td className="px-4 py-3"><div className="h-3.5 bg-gray-200 rounded w-12"></div></td>
+                    <td className="px-4 py-3"><div className="h-3.5 bg-gray-200 rounded w-10"></div></td>
+                    <td className="px-4 py-3"><div className="h-3.5 bg-gray-200 rounded w-28"></div></td>
+                    <td className="px-4 py-3 text-right"><div className="h-4 bg-gray-200 rounded w-20 ml-auto"></div></td>
+                  </tr>
+                ))
+              ) : currentStudents.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-8 text-center text-gray-400 italic">
                     No students matching criteria found in directory.
