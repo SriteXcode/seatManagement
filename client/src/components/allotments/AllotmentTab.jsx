@@ -180,6 +180,50 @@ export default function AllotmentTab({
     
   const label1 = activeSavedConfig?.fields.find(f => f.type === 'constraint_1')?.label || (selectedExamType === "School" ? "Class" : "Dept");
 
+  const candidateSeatKeys = React.useMemo(() => {
+    const validKeys = new Set();
+    if (!selectedStudentForMove || selectedStudentForMove.source !== "bucket") return validKeys;
+    const student = (bucket || []).find(s => String(s._id) === String(selectedStudentForMove.studentId));
+    if (!student) return validKeys;
+
+    const studentGroup = student.groupCode || `${student.dept || ''}_${student.sem || ''}`;
+
+    (rooms || []).forEach(rm => {
+      const rmAllotments = (allotments || []).filter(a => String(a.room._id || a.room) === String(rm._id));
+      const occMap = {};
+      rmAllotments.forEach(a => {
+        occMap[`${a.row},${a.col}`] = a.student;
+      });
+
+      const maxR = rm.rows || 1;
+      const maxC = rm.cols || 1;
+
+      for (let r = 1; r <= maxR; r++) {
+        for (let c = 1; c <= maxC; c++) {
+          const isHidden = rm.layoutMatrix && rm.layoutMatrix[r - 1] && rm.layoutMatrix[r - 1][c - 1] === 'hidden';
+          if (isHidden) continue;
+          if (occMap[`${r},${c}`]) continue;
+
+          const leftSt = occMap[`${r},${c - 1}`];
+          if (leftSt) {
+            const leftGroup = leftSt.groupCode || `${leftSt.dept || ''}_${leftSt.sem || ''}`;
+            if (leftGroup === studentGroup) continue;
+          }
+
+          const rightSt = occMap[`${r},${c + 1}`];
+          if (rightSt) {
+            const rightGroup = rightSt.groupCode || `${rightSt.dept || ''}_${rightSt.sem || ''}`;
+            if (rightGroup === studentGroup) continue;
+          }
+
+          validKeys.add(`${rm._id}-${r}-${c}`);
+        }
+      }
+    });
+
+    return validKeys;
+  }, [selectedStudentForMove, bucket, rooms, allotments]);
+
   const plural = (word) => {
     const wl = (word || "").toLowerCase();
     if (wl === 'class') return 'Classes';
@@ -874,6 +918,8 @@ export default function AllotmentTab({
                         const isSeatDragOver = dragOverSeatKey === `${room._id}-${row}-${col}`;
                         const isSelected = entry && isVisible && selectedStudentForMove && selectedStudentForMove.studentId === entry.student._id;
 
+                        const isCandidateSeat = candidateSeatKeys.has(`${room._id}-${row}-${col}`);
+
                         return (
                           <div
                             key={key}
@@ -921,9 +967,11 @@ export default function AllotmentTab({
                                 ? 'border-none bg-transparent opacity-0 text-transparent pointer-events-none'
                                 : entry && isVisible
                                   ? `${getDeptColor(entry.student.dept, entry.student.sem, entry.student.subject)} shadow-sm cursor-pointer`
-                                  : isLayoutGap
-                                    ? 'border-2 border-dashed border-gray-300 bg-gray-100/70 text-gray-500 border'
-                                    : `border border-gray-250 bg-white hover:bg-gray-50/50 ${selectedStudentForMove ? 'cursor-pointer' : ''}`
+                                  : isCandidateSeat
+                                    ? 'ring-2 ring-emerald-500 bg-emerald-100/90 border-emerald-500 cursor-pointer shadow-md animate-pulse z-10'
+                                    : isLayoutGap
+                                      ? 'border-2 border-dashed border-gray-300 bg-gray-100/70 text-gray-500 border'
+                                      : `border border-gray-250 bg-white hover:bg-gray-50/50 ${selectedStudentForMove ? 'cursor-pointer' : ''}`
                               } ${
                                 isSeatDragOver ? 'ring-2 ring-red-500 scale-105 bg-red-50/40 z-10' : ''
                               } ${
@@ -950,7 +998,12 @@ export default function AllotmentTab({
                                   </div>
                                 </div>
                               );
-                            })() : (
+                            })() : isCandidateSeat ? (
+                              <div className="w-full h-full flex flex-col items-center justify-center text-emerald-800 font-extrabold select-none">
+                                <i className="las la-plus-circle text-base animate-bounce"></i>
+                                <span className="text-[7.5px] font-black uppercase tracking-wider mt-0.5 leading-none">FIT SEAT</span>
+                              </div>
+                            ) : (
                               <div className="w-full h-full flex flex-col justify-center text-gray-400 select-none">
                                 {isHidden ? '' : (
                                   <>

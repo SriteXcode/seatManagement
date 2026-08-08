@@ -1360,6 +1360,54 @@ export default function App() {
     setSelectedStudentForMove(null);
   };
 
+  const handleAutoFitStudent = (student) => {
+    if (!student || userRole !== "admin") return;
+    if (!rooms || rooms.length === 0) {
+      showToast("No classrooms available to place student.", "warning");
+      return;
+    }
+
+    const studentGroupCode = student.groupCode || `${student.dept || ''}_${student.sem || ''}`;
+
+    for (const room of rooms) {
+      const rows = room.rows || 1;
+      const cols = room.cols || 1;
+
+      for (let r = 1; r <= rows; r++) {
+        for (let c = 1; c <= cols; c++) {
+          const isHidden = room.layoutMatrix && room.layoutMatrix[r - 1] && room.layoutMatrix[r - 1][c - 1] === 'hidden';
+          if (isHidden) continue;
+
+          const isRowGap = useDistancing && gapAction !== 'bring-together' && rowGrouping > 0 && ((r - 1) % (rowGrouping + 1)) === rowGrouping;
+          const isColGap = useDistancing && gapAction !== 'bring-together' && colGrouping > 0 && ((c - 1) % (colGrouping + 1)) === colGrouping;
+          if ((isRowGap || isColGap) && gapType === 'physical-gap') continue;
+
+          const isOccupied = allotments.some(a => String(a.room._id || a.room) === String(room._id) && a.row === r && a.col === c);
+          if (isOccupied) continue;
+
+          const leftAllotment = allotments.find(a => String(a.room._id || a.room) === String(room._id) && a.row === r && a.col === c - 1);
+          if (leftAllotment && leftAllotment.student) {
+            const leftGroup = leftAllotment.student.groupCode || `${leftAllotment.student.dept || ''}_${leftAllotment.student.sem || ''}`;
+            if (leftGroup === studentGroupCode) continue;
+          }
+
+          const rightAllotment = allotments.find(a => String(a.room._id || a.room) === String(room._id) && a.row === r && a.col === c + 1);
+          if (rightAllotment && rightAllotment.student) {
+            const rightGroup = rightAllotment.student.groupCode || `${rightAllotment.student.dept || ''}_${rightAllotment.student.sem || ''}`;
+            if (rightGroup === studentGroupCode) continue;
+          }
+
+          const seatCode = getSeatLabel(r - 1, c - 1);
+          executeMove("bucket", student._id, null, null, null, room, r, c);
+          showToast(`✨ Auto-placed ${student.roll} into ${room.name} (Seat ${seatCode})`, "success");
+          return;
+        }
+      }
+    }
+
+    showToast(`No valid non-conflicting empty seat found for ${student.roll}`, "warning");
+  };
+
   const handleAssignClick = (student) => {
     if (userRole !== "admin") return;
     if (!rooms || rooms.length === 0) {
@@ -3488,6 +3536,7 @@ export default function App() {
             selectedStudentForMove={selectedStudentForMove}
             handleTapStudent={handleTapStudent}
             handleTapEmptySeat={handleTapEmptySeat}
+            onAutoFitStudent={handleAutoFitStudent}
             deleteSchedule={deleteActiveSchedule}
             updateSchedule={updateActiveSchedule}
             arrangementMode={arrangementMode}
@@ -3557,6 +3606,7 @@ export default function App() {
           handleTapStudent={handleTapStudent}
           handleTapBucket={handleTapBucket}
           handleAssignClick={handleAssignClick}
+          onAutoFitStudent={handleAutoFitStudent}
           handleClearBucket={handleClearBucket}
           onDownloadRemainingPDF={downloadRemainingStudentsPDF}
         />

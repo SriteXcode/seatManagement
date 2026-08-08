@@ -29,6 +29,7 @@ export default function StagingBucket({
   handleTapStudent,
   handleTapBucket,
   handleAssignClick,
+  onAutoFitStudent,
   handleClearBucket,
   onDownloadRemainingPDF,
 }) {
@@ -369,10 +370,22 @@ export default function StagingBucket({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
+                              if (onAutoFitStudent) onAutoFitStudent(student);
+                            }}
+                            className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold px-2.5 py-1.5 rounded-lg text-[10px] transition-all cursor-pointer flex items-center justify-center gap-1 shadow-2xs border border-emerald-200 hover:scale-105 active:scale-95 flex-1 sm:flex-none text-center min-h-[30px]"
+                            title="Auto-find and place in first non-conflicting empty seat"
+                          >
+                            <i className="las la-magic text-xs"></i>
+                            Auto-Fit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
                               handleAssignClick(student);
                             }}
-                            className="bg-red-50 hover:bg-red-100 text-red-700 font-bold px-3 py-1.5 rounded-lg text-[10px] transition-all cursor-pointer flex items-center justify-center gap-1 shadow-2xs border border-red-200 hover:scale-105 active:scale-95 flex-1 sm:flex-none text-center min-h-[30px]"
-               title="Assign to classroom"
+                            className="bg-red-50 hover:bg-red-100 text-red-700 font-bold px-2.5 py-1.5 rounded-lg text-[10px] transition-all cursor-pointer flex items-center justify-center gap-1 shadow-2xs border border-red-200 hover:scale-105 active:scale-95 flex-1 sm:flex-none text-center min-h-[30px]"
+                            title="Assign to classroom"
                           >
                             <i className="las la-user-plus text-xs"></i>
                             Assign
