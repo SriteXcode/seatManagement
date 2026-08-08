@@ -66,15 +66,19 @@ export const api = {
 
   // Schedules
   getSchedules: (token) => request("/schedules", {}, token),
-  saveSchedule: (scheduleData, token) =>
+  saveSchedule: (scheduleData, token, options = {}) =>
     request("/schedules", {
       method: "POST",
       body: JSON.stringify(scheduleData),
+      ...options
     }, token),
-  regenerateSchedule: (payload, token) =>
+  getAllotmentProgress: (shift, date, token) =>
+    request(`/schedules/progress?shift=${shift}&date=${date}`, {}, token),
+  regenerateSchedule: (payload, token, options = {}) =>
     request("/schedules/regenerate", {
       method: "POST",
       body: JSON.stringify(payload),
+      ...options
     }, token),
   deleteSchedule: (shift, date, token) =>
     request(`/schedules?shift=${shift}&date=${date}`, {
@@ -277,4 +281,27 @@ export const api = {
   getDownloadCSVUrl: (shift, date) => `${API_BASE}/export/csv?shift=${shift}&date=${date}`,
   getRoomGridCsvUrl: (roomId, shift, date) => `${API_BASE}/export/room-grid?roomId=${roomId}&shift=${shift}&date=${date}&format=csv`,
   getRoomGridJsonUrl: (roomId, shift, date) => `${API_BASE}/export/room-grid?roomId=${roomId}&shift=${shift}&date=${date}&format=json`,
+
+  // AI Allotment Advisor & Learning APIs
+  getAiSuggestions: (payload, token) =>
+    request("/ai/suggest", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, token),
+  submitAiFeedback: (payload, token) =>
+    request("/ai/feedback", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, token),
+  compareAndLearnLayouts: (payload, token) =>
+    request("/ai/compare-and-learn", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, token),
+  getLearnedRules: (token) =>
+    request("/ai/rules", {}, token),
+  deleteLearnedRule: (id, token) =>
+    request(`/ai/rules/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }, token),
 };

@@ -9,6 +9,7 @@ router.get("/schedules", authMiddleware, allotmentController.getSchedules);
 router.get("/export/csv", authMiddleware, allotmentController.exportCSV);
 router.get("/export/pdf", authMiddleware, allotmentController.exportPDF);
 router.get("/export/room-grid", authMiddleware, allotmentController.exportRoomGrid);
+router.get("/schedules/progress", authMiddleware, allotmentController.getProgress);
 router.post("/generate", authMiddleware, adminOnly, allotmentController.generate);
 router.post("/schedules", authMiddleware, adminOnly, allotmentController.generate);
 router.post("/schedules/regenerate", authMiddleware, adminOnly, allotmentController.regenerate);

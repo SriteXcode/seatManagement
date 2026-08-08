@@ -1,7 +1,8 @@
-import React from "react";
+import React ,{ useState } from "react";
 import FilterControls from "./FilterControls";
-import { getDeptColor, getSeatLabel, decodeToken } from "../../utils/helpers";
+import { getDeptColor, getDeptColorObject, getStudentClassSecLabel, getSeatLabel, decodeToken } from "../../utils/helpers";
 import CustomSelect from "../common/CustomSelect";
+
 
 export default function AllotmentTab({
   userRole,
@@ -12,6 +13,8 @@ export default function AllotmentTab({
   setDate,
   time,
   setTime,
+  subject,
+  setSubject,
   shift,
   setShift,
   seed,
@@ -77,6 +80,7 @@ export default function AllotmentTab({
   setShowGenerateModal,
   loading = false
 }) {
+  const [hoverDetailsEnabled, setHoverDetailsEnabled] = useState(true);
   const getStudentCountForCombo = (combo) => {
     if (!Array.isArray(allStudents)) return 0;
     const isSubjectCompulsory = selectedExamType === "College" || selectedExamType === "School";
@@ -105,13 +109,13 @@ export default function AllotmentTab({
 
   const decoded = decodeToken(token);
   const isLoggedIn = Boolean(token);
-  const [showComments, setShowComments] = React.useState(false);
-  const [isEditingSchedule, setIsEditingSchedule] = React.useState(false);
-  const [editDate, setEditDate] = React.useState("");
-  const [editShift, setEditShift] = React.useState(1);
-  const [editTime, setEditTime] = React.useState("");
-  const [editSubject, setEditSubject] = React.useState("");
-  const [editCombinations, setEditCombinations] = React.useState([]);
+  const [showComments, setShowComments] = useState(false);
+  const [isEditingSchedule, setIsEditingSchedule] = useState(false);
+  const [editDate, setEditDate] = useState("");
+  const [editShift, setEditShift] = useState(1);
+  const [editTime, setEditTime] = useState("");
+  const [editSubject, setEditSubject] = useState("");
+  const [editCombinations, setEditCombinations] = useState([]);
 
   const handleStartEditSchedule = () => {
     setEditDate(date);
@@ -156,8 +160,8 @@ export default function AllotmentTab({
     });
     setIsEditingSchedule(false);
   };
-  const [hoveredSeat, setHoveredSeat] = React.useState(null);
-  const [windowSize, setWindowSize] = React.useState({ width: 1200, height: 800 });
+  const [hoveredSeat, setHoveredSeat] = useState(null);
+  const [windowSize, setWindowSize] = useState({ width: 1200, height: 800 });
 
   React.useEffect(() => {
     if (typeof window !== "undefined") {
@@ -174,7 +178,7 @@ export default function AllotmentTab({
     ? (examConfigs.find(c => c.examType === (activeSavedSchedule.examType || 'College')) || activeConfig)
     : activeConfig;
     
-  const label1 = activeSavedConfig?.fields.find(f => f.type === 'constraint_1')?.label || 'Dept';
+  const label1 = activeSavedConfig?.fields.find(f => f.type === 'constraint_1')?.label || (selectedExamType === "School" ? "Class" : "Dept");
 
   const plural = (word) => {
     const wl = (word || "").toLowerCase();
@@ -370,12 +374,14 @@ export default function AllotmentTab({
 
           <div className="mt-3 flex flex-wrap gap-2.5 border-t pt-3.5 select-none">
             {userRole === "admin" && (
-              <button
-                onClick={generate}
-                className="bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-5 rounded-xl text-xs transition-colors shadow cursor-pointer"
-              >
-                Generate Allotment
-              </button>
+              <>
+                <button
+                  onClick={generate}
+                  className="bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-5 rounded-xl text-xs transition-colors shadow cursor-pointer"
+                >
+                  Generate Allotment
+                </button>
+              </>
             )}
             <button
               onClick={downloadCSV}
@@ -410,7 +416,7 @@ export default function AllotmentTab({
                   setDate(s.date); 
                   setShift(s.shift); 
                   if (s.time) setTime(s.time); 
-                  if (s.subject) setSubject(s.subject); 
+                  if (s.subject && typeof setSubject === "function") setSubject(s.subject); 
                   if (s.examType) {
                     setSelectedExamType(s.examType);
                     localStorage.setItem("selectedExamType", s.examType);
@@ -445,8 +451,8 @@ export default function AllotmentTab({
                   <div className="text-[11px] text-gray-500 mt-2 space-y-1 border-t border-gray-100 pt-2 w-full text-left select-none">
                     {(() => {
                       const cardConfig = examConfigs.find(c => c.examType === (s.examType || 'College'));
-                      const label1 = cardConfig?.fields.find(f => f.type === 'constraint_1')?.label || 'Dept';
-                      const label2 = cardConfig?.fields.find(f => f.type === 'constraint_2')?.label || 'Sem';
+                      const label1 = cardConfig?.fields.find(f => f.type === 'constraint_1')?.label || (s.examType === "School" ? 'Class' : 'Dept');
+                      const label2 = cardConfig?.fields.find(f => f.type === 'constraint_2')?.label || (s.examType === "School" ? 'Sec' : 'Sem');
                       
                       if (s.combinations && s.combinations.length > 0) {
                         const formattedCombos = s.combinations.map(combo => {
@@ -764,19 +770,6 @@ export default function AllotmentTab({
                 Saving changes...
               </div>
             )}
-            {/* {isLoggedIn && (
-              <button
-                onClick={() => setShowBucketSidebar(prev => !prev)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg border border-red-200 text-xs font-semibold transition-all cursor-pointer shadow-xs animate-fadeIn"
-              >
-                <img 
-                  src="https://img.icons8.com/?size=30&id=Anr2RtO0yx8e&format=png&color=B91C1C" 
-                  alt="Staging Bucket" 
-                  className="w-4 h-4 object-contain" 
-                />
-                {showBucketSidebar ? 'Hide Staging Bucket' : `Show Staging Bucket (${bucket.length})`}
-              </button>
-            )} */}
           </div>
         </div>
         <div className="mt-3 space-y-2 select-none">
@@ -829,7 +822,21 @@ export default function AllotmentTab({
                       })()})
                     </span>
                   </h4>
-                  <div className="text-[10px] text-gray-400 font-semibold">Hover a seat for details</div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setHoverDetailsEnabled(!hoverDetailsEnabled)}
+                      className={`text-[11px] font-bold px-3 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1.5 border select-none ${
+                        hoverDetailsEnabled 
+                          ? "bg-purple-50 border-purple-300 text-purple-900 shadow-2xs" 
+                          : "bg-gray-100 border-gray-250 text-gray-500 hover:bg-gray-200"
+                      }`}
+                      title="Click to toggle seat detail hover tooltip"
+                    >
+                      <i className={`las ${hoverDetailsEnabled ? 'la-eye text-purple-700' : 'la-eye-slash text-gray-400'} text-sm`}></i>
+                      Hover Seat Details: <span className="uppercase font-extrabold">{hoverDetailsEnabled ? "ON" : "OFF"}</span>
+                    </button>
+                  </div>
                 </div>
                 <div className="overflow-auto border rounded p-2 select-none">
                   <div 
@@ -894,7 +901,7 @@ export default function AllotmentTab({
                               }
                             }}
                             onMouseMove={(e) => {
-                              if (isHidden) return;
+                              if (isHidden || !hoverDetailsEnabled) return;
                               setHoveredSeat({
                                 entry: entry && isVisible ? entry : null,
                                 seatCode,
@@ -909,30 +916,41 @@ export default function AllotmentTab({
                             onMouseLeave={() => {
                               setHoveredSeat(null);
                             }}
-                            className={`w-16 h-14 flex items-center justify-center text-[10px] text-center p-1 transition-all rounded-lg border select-none ${
+                            className={`w-16 h-14 flex items-center justify-center text-[10px] text-center p-1 transition-all rounded-lg select-none ${
                               isHidden
                                 ? 'border-none bg-transparent opacity-0 text-transparent pointer-events-none'
                                 : entry && isVisible
-                                  ? `${getDeptColor(entry.student.dept, entry.student.sem)} border-gray-400 shadow-sm cursor-pointer`
+                                  ? `${getDeptColor(entry.student.dept, entry.student.sem, entry.student.subject)} shadow-sm cursor-pointer`
                                   : isLayoutGap
-                                    ? 'border-2 border-dashed border-gray-300 bg-gray-100/70 text-gray-500'
-                                    : `border-gray-250 bg-white hover:bg-gray-50/50 ${selectedStudentForMove ? 'cursor-pointer' : ''}`
+                                    ? 'border-2 border-dashed border-gray-300 bg-gray-100/70 text-gray-500 border'
+                                    : `border border-gray-250 bg-white hover:bg-gray-50/50 ${selectedStudentForMove ? 'cursor-pointer' : ''}`
                               } ${
-                                isSeatDragOver ? 'border-2 border-dashed border-red-500 scale-105 bg-red-50/40 z-10' : ''
+                                isSeatDragOver ? 'ring-2 ring-red-500 scale-105 bg-red-50/40 z-10' : ''
                               } ${
-                                isSelected ? 'ring-2 ring-red-500 scale-105 z-20 bg-red-50/40' : ''
+                                isSelected ? 'ring-2 ring-red-600 scale-105 z-20 shadow-md' : ''
                               }`}
                           >
-                            {isVisible && entry ? (
-                              <div
-                                draggable={userRole === "admin"}
-                                onDragStart={(e) => handleDragStartSeat(e, entry.student, room, row, col)}
-                                className={`w-full h-full flex flex-col justify-center select-none transition-transform ${userRole === "admin" ? "cursor-grab active:cursor-grabbing hover:scale-[1.03] active:scale-95" : ""}`}
-                              >
-                                <div className="font-bold text-gray-900 text-[10px] tracking-tight select-none">{roll ? roll : '-'}</div>
-                                <div className="text-[8px] font-extrabold text-gray-500 mt-0.5 select-none">{roll ? seatCode : ''}</div>
-                              </div>
-                            ) : (
+                            {isVisible && entry ? (() => {
+                              const colorObj = getDeptColorObject(entry.student.dept, entry.student.sem, entry.student.subject);
+                              const deptSemBadge = getStudentClassSecLabel(entry.student);
+                              return (
+                                <div
+                                  draggable={userRole === "admin"}
+                                  onDragStart={(e) => handleDragStartSeat(e, entry.student, room, row, col)}
+                                  className={`w-full h-full flex flex-col justify-between p-0.5 select-none transition-transform ${userRole === "admin" ? "cursor-grab active:cursor-grabbing hover:scale-[1.03] active:scale-95" : ""}`}
+                                >
+                                  <div className="flex items-center justify-between gap-0.5">
+                                    <span className="font-extrabold text-gray-950 text-[9.5px] tracking-tight truncate leading-none">{roll ? roll : '-'}</span>
+                                    <span className="text-[7.5px] font-black text-gray-700 leading-none">{seatCode}</span>
+                                  </div>
+                                  <div className="flex items-center justify-center mt-0.5">
+                                    <span className={`text-[7px] font-black px-1.5 py-0.5 rounded-full shadow-2xs uppercase tracking-wider truncate max-w-full leading-none ${colorObj.badge}`}>
+                                      {deptSemBadge}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })() : (
                               <div className="w-full h-full flex flex-col justify-center text-gray-400 select-none">
                                 {isHidden ? '' : (
                                   <>
@@ -991,13 +1009,12 @@ export default function AllotmentTab({
                   </span>
                 </div>
                 <div className="flex flex-col col-span-2 bg-slate-800/40 rounded-lg p-1.5 border border-slate-800">
-                  <span className="text-[9px] text-slate-400 uppercase font-semibold">Department & Sem</span>
+                  <span className="text-[9px] text-slate-400 uppercase font-semibold">
+                    {selectedExamType === "School" ? "Class & Section" : "Department & Sem"}
+                  </span>
                   <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                    <span className="px-2 py-0.5 bg-red-500/20 text-red-300 rounded-md font-bold text-[10px] border border-red-500/30">
-                      {hoveredSeat.entry.student.dept}
-                    </span>
-                    <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 rounded-md font-bold text-[10px] border border-blue-500/30">
-                      Sem {hoveredSeat.entry.student.sem}
+                    <span className="px-2.5 py-0.5 bg-red-500/20 text-red-300 rounded-md font-extrabold text-[11px] border border-red-500/30">
+                      {getStudentClassSecLabel(hoveredSeat.entry.student)}
                     </span>
                   </div>
                 </div>

@@ -3,7 +3,22 @@ import Room from "../models/Room.js";
 import Student from "../models/Student.js";
 import InvigAssignment from "../models/InvigAssignment.js";
 import { generateAllotments as generateAlgo } from "../services/seatGenerator.js";
+import { learnFromManualAdjustments } from "../services/aiSeatAdvisor.js";
 
+
+const activeProgressStore = {};
+
+export const getProgress = async (req, res) => {
+  try {
+    const shift = req.query.shift || 1;
+    const date = req.query.date || "";
+    const key = `${req.user.adminCode}_${shift}_${date}`;
+    const progress = activeProgressStore[key] || null;
+    res.json({ ok: true, progress });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+};
 
 export const generate = async (req, res) => {
   try {
@@ -44,19 +59,38 @@ export const generate = async (req, res) => {
       classSet.add(classKey);
     }
 
-    const rooms = await Room.find({ orgCode: req.user.adminCode }).lean();
+    const { selectedRoomIds } = req.body;
+    let rooms = [];
+    if (Array.isArray(selectedRoomIds) && selectedRoomIds.length > 0) {
+      rooms = await Room.find({ _id: { $in: selectedRoomIds }, orgCode: req.user.adminCode }).lean();
+    } else {
+      rooms = await Room.find({ orgCode: req.user.adminCode }).lean();
+    }
     
     const query = { 
-      examType: activeExamType,
       orgCode: req.user.adminCode,
       $or: deptSemCombinations.map(combo => ({
         dept: combo.dept,
-        sem: combo.sem,
-        ...(combo.subject ? { $or: [{ subject: combo.subject }, { subject: [] }, { subject: "" }, { subject: null }, { subject: { $exists: false } }] } : {})
+        $or: [{ sem: Number(combo.sem) }, { sem: String(combo.sem) }],
+        ...(combo.subject ? { 
+          $or: [
+            { subject: combo.subject }, 
+            { subject: { $in: [combo.subject] } },
+            { subject: [] }, 
+            { subject: "" }, 
+            { subject: null }, 
+            { subject: { $exists: false } }
+          ] 
+        } : {})
       })) 
     };
+    if (activeExamType) query.examType = activeExamType;
     
     let students = await Student.find(query).lean();
+    if (students.length === 0 && activeExamType) {
+      delete query.examType;
+      students = await Student.find(query).lean();
+    }
     console.log(`[Backend Generate] Query details:`, JSON.stringify(query));
     console.log(`[Backend Generate] Found students count:`, students.length);
     console.log(`[Backend Generate] Found rooms count:`, rooms.length);
@@ -65,26 +99,34 @@ export const generate = async (req, res) => {
       students = students.filter(s => !excludeSet.has(String(s._id)));
     }
 
-    const toDeleteIds = [];
-    const blockers = [];
-    for (const a of existing) {
-      if (!a.student) continue;
-      const isTarget = deptSemCombinations.some(combo => combo.dept === a.student.dept && Number(combo.sem) === Number(a.student.sem));
-      if (isTarget) toDeleteIds.push(a._id);
-      else blockers.push({ room: String(a.room._id || a.room), row: a.row, col: a.col, student: a.student });
+    // Remove ALL previous allotments for this slot so we allot completely from scratch
+    await Allotment.deleteMany({ shift, date, orgCode: req.user.adminCode });
+
+    const progressKey = `${req.user.adminCode}_${shift}_${date}`;
+    activeProgressStore[progressKey] = {
+      roomX: 0,
+      roomTotal: rooms.length,
+      roomName: "Initializing...",
+      attemptX: 1,
+      attemptTotal: 10,
+      estimatedTimeSec: Math.max(1, Math.ceil(rooms.length * 0.3))
+    };
+
+    let generateResult;
+    try {
+      generateResult = generateAlgo({ 
+        students, rooms, shift, seed, occupied: [],
+        useDistancing: Boolean(useDistancing && gapAction === 'remove-seats'),
+        rowGrouping: Number(rowGrouping) || 0,
+        colGrouping: Number(colGrouping) || 0,
+        arrangementMode: arrangementMode || "loose",
+        patternMode: patternMode || "scrambled"
+      }, (info) => { activeProgressStore[progressKey] = info; });
+    } finally {
+      delete activeProgressStore[progressKey];
     }
-
-    if (toDeleteIds.length > 0) await Allotment.deleteMany({ _id: { $in: toDeleteIds }, orgCode: req.user.adminCode });
-
-    const { allotments: generatedAllotments, notPlaced } = generateAlgo({ 
-      students, rooms, shift, seed, occupied: blockers,
-      useDistancing: Boolean(useDistancing && gapAction === 'remove-seats'),
-      rowGrouping: Number(rowGrouping) || 0,
-      colGrouping: Number(colGrouping) || 0,
-      arrangementMode: arrangementMode || "loose",
-      patternMode: patternMode || "scrambled"
-    });
-    console.log(`[Backend Generate] Algo output - allotments: ${generatedAllotments.length}, notPlaced: ${notPlaced.length}`);
+    const { allotments: generatedAllotments, notPlaced, retriesCount, attemptsUsed } = generateResult;
+    console.log(`[Backend Generate] Algo output - allotments: ${generatedAllotments.length}, notPlaced: ${notPlaced.length}, retriesCount: ${retriesCount || 0}`);
 
     const docs = generatedAllotments.map(a => {
       const matchingCombo = deptSemCombinations.find(combo => combo.dept === a.student.dept && String(combo.sem) === String(a.student.sem));
@@ -117,7 +159,13 @@ export const generate = async (req, res) => {
     const allDocs = [...docs, ...notPlacedDocs];
     if (allDocs.length) await Allotment.insertMany(allDocs);
     console.log(`[Backend Generate] Inserted allotments count: ${docs.length}, and unallotted count: ${notPlacedDocs.length}`);
-    res.json({ ok: true, count: docs.length, notPlaced: notPlaced.map(s => s.roll) });
+    res.json({ 
+      ok: true, 
+      count: docs.length, 
+      notPlaced: notPlaced.map(s => s.roll),
+      retriesCount: retriesCount || 0,
+      attemptsUsed: attemptsUsed || 1
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -127,12 +175,128 @@ export const regenerate = async (req, res) => {
   try {
     const shift = Number(req.body.shift) || 1;
     const seed = Number(req.body.seed || 1);
-    const { date, useDistancing, rowGrouping, colGrouping, gapType, gapAction, arrangementMode, patternMode } = req.body;
+    const { date, useDistancing, rowGrouping, colGrouping, gapType, gapAction, arrangementMode, patternMode, selectedRoomIds, mode = "scratch", bucketStudentIds = [] } = req.body;
     if (!date) return res.status(400).json({ error: "Date is required" });
 
-    // Find all existing allotments for this date and shift to get their student combinations
+    // Find all existing allotments for this date and shift
     const existing = await Allotment.find({ shift, date, orgCode: req.user.adminCode }).populate("student").lean();
     if (existing.length === 0) return res.status(404).json({ error: "No allotments exist for this slot to regenerate." });
+
+    if (mode === "fillBucket") {
+      // MODE: Backtrack & Fill Blank Spaces from Bucket
+      // 1. Occupied room allotments remain intact
+      const occupiedAllotments = existing.filter(a => a.room && a.student);
+
+      // 2. Identify unplaced bucket students
+      let bucketStudents = [];
+      if (Array.isArray(bucketStudentIds) && bucketStudentIds.length > 0) {
+        bucketStudents = await Student.find({ _id: { $in: bucketStudentIds } }).lean();
+      } else {
+        const stagedAllotments = existing.filter(a => !a.room && a.student);
+        if (stagedAllotments.length > 0) {
+          bucketStudents = stagedAllotments.map(a => a.student);
+        } else {
+          const placedStudentIds = new Set(occupiedAllotments.map(a => String(a.student._id)));
+          const allSlotStudents = await Student.find({ orgCode: req.user.adminCode }).lean();
+          bucketStudents = allSlotStudents.filter(s => !placedStudentIds.has(String(s._id)));
+        }
+      }
+
+      if (bucketStudents.length === 0) {
+        return res.json({ ok: true, message: "No bucket students available to place into blank spaces.", newPlacedCount: 0 });
+      }
+
+      let rooms = [];
+      if (Array.isArray(selectedRoomIds) && selectedRoomIds.length > 0) {
+        rooms = await Room.find({ _id: { $in: selectedRoomIds }, orgCode: req.user.adminCode }).lean();
+      } else {
+        rooms = await Room.find({ orgCode: req.user.adminCode }).lean();
+      }
+
+      const occupiedList = occupiedAllotments.map(a => ({
+        room: a.room._id || a.room,
+        row: a.row,
+        col: a.col,
+        student: a.student
+      }));
+
+      const progressKey = `${req.user.adminCode}_${shift}_${date}`;
+      activeProgressStore[progressKey] = {
+        roomX: 0,
+        roomTotal: rooms.length,
+        roomName: "Initializing...",
+        attemptX: 1,
+        attemptTotal: 10,
+        estimatedTimeSec: Math.max(1, Math.ceil(rooms.length * 0.3))
+      };
+
+      let generateResult;
+      try {
+        generateResult = generateAlgo({
+          students: bucketStudents,
+          rooms,
+          shift,
+          seed,
+          occupied: occupiedList,
+          useDistancing: Boolean(useDistancing && gapAction === 'remove-seats'),
+          rowGrouping: Number(rowGrouping) || 0,
+          colGrouping: Number(colGrouping) || 0,
+          arrangementMode: arrangementMode || "loose",
+          patternMode: patternMode || "scrambled"
+        }, (info) => { activeProgressStore[progressKey] = info; });
+      } finally {
+        delete activeProgressStore[progressKey];
+      }
+
+      const { allotments: generatedAllotments, notPlaced, retriesCount } = generateResult;
+      const existingKeySet = new Set(occupiedAllotments.map(a => `${String(a.room._id || a.room)}_${a.row}_${a.col}`));
+
+      // Filter only newly placed allotments
+      const newAllotments = generatedAllotments.filter(a => 
+        !existingKeySet.has(`${String(a.room._id || a.room)}_${a.row}_${a.col}`)
+      );
+
+      if (newAllotments.length > 0) {
+        const timeVal = existing.length > 0 ? existing[0].time : "";
+        const docs = newAllotments.map(a => ({
+          student: a.student._id,
+          room: a.room._id || a.room,
+          row: a.row,
+          col: a.col,
+          seatCode: a.seatCode,
+          shift,
+          date,
+          time: timeVal,
+          subject: (Array.isArray(a.student.subject) ? a.student.subject[0] : a.student.subject) || "",
+          seatLabel: `${a.room.name || 'Room'}.-${a.seatCode}-StudentRollno(${a.student.roll})`,
+          useDistancing: Boolean(useDistancing),
+          rowGrouping: Number(rowGrouping) || 0,
+          colGrouping: Number(colGrouping) || 0,
+          gapType: gapType || "",
+          gapAction: gapAction || "",
+          arrangementMode: arrangementMode || "loose",
+          patternMode: patternMode || "scrambled",
+          orgCode: req.user.adminCode
+        }));
+
+        // Remove old staging bucket records for newly placed students
+        const newlyPlacedStudentIds = newAllotments.map(a => a.student._id);
+        await Allotment.deleteMany({ shift, date, room: null, student: { $in: newlyPlacedStudentIds }, orgCode: req.user.adminCode });
+
+        // Save newly placed allotments
+        await Allotment.insertMany(docs);
+      }
+
+      return res.json({
+        ok: true,
+        message: newAllotments.length > 0
+          ? `Successfully placed ${newAllotments.length} bucket student(s) into empty seat spaces!`
+          : `No bucket students could fit into remaining blank spaces under ${arrangementMode} mode rules.`,
+        retriesCount: retriesCount || 0,
+        newPlacedCount: newAllotments.length,
+        notPlacedCount: notPlaced.length
+      });
+    }
 
     // Extract unique examType and student combinations
     let examType = "College";
@@ -153,28 +317,51 @@ export const regenerate = async (req, res) => {
     // Delete ALL existing allotments for this slot so regeneration starts completely from scratch
     await Allotment.deleteMany({ shift, date, orgCode: req.user.adminCode });
 
-    const rooms = await Room.find({ orgCode: req.user.adminCode }).lean();
+    let rooms = [];
+    if (Array.isArray(selectedRoomIds) && selectedRoomIds.length > 0) {
+      rooms = await Room.find({ _id: { $in: selectedRoomIds }, orgCode: req.user.adminCode }).lean();
+    } else {
+      rooms = await Room.find({ orgCode: req.user.adminCode }).lean();
+    }
 
-    const query = { 
-      examType,
-      orgCode: req.user.adminCode,
-      $or: deptSemCombinations.map(combo => ({
-        dept: combo.dept,
-        sem: combo.sem,
-        ...(combo.subject ? { $or: [{ subject: combo.subject }, { subject: [] }, { subject: "" }, { subject: null }, { subject: { $exists: false } }] } : {})
-      })) 
+    const existingStudentIds = existing.filter(a => a.student).map(a => a.student._id);
+    let students = await Student.find({ _id: { $in: existingStudentIds } }).lean();
+
+    if (students.length === 0 && deptSemCombinations.length > 0) {
+      const query = { 
+        orgCode: req.user.adminCode,
+        $or: deptSemCombinations.map(combo => ({
+          dept: combo.dept,
+          $or: [{ sem: Number(combo.sem) }, { sem: String(combo.sem) }]
+        })) 
+      };
+      students = await Student.find(query).lean();
+    }
+
+    const progressKey = `${req.user.adminCode}_${shift}_${date}`;
+    activeProgressStore[progressKey] = {
+      roomX: 0,
+      roomTotal: rooms.length,
+      roomName: "Initializing...",
+      attemptX: 1,
+      attemptTotal: 10,
+      estimatedTimeSec: Math.max(1, Math.ceil(rooms.length * 0.3))
     };
 
-    let students = await Student.find(query).lean();
-
-    const { allotments: generatedAllotments, notPlaced } = generateAlgo({ 
-      students, rooms, shift, seed, occupied: [],
-      useDistancing: Boolean(useDistancing && gapAction === 'remove-seats'),
-      rowGrouping: Number(rowGrouping) || 0,
-      colGrouping: Number(colGrouping) || 0,
-      arrangementMode: arrangementMode || "loose",
-      patternMode: patternMode || "scrambled"
-    });
+    let generateResult;
+    try {
+      generateResult = generateAlgo({ 
+        students, rooms, shift, seed, occupied: [],
+        useDistancing: Boolean(useDistancing && gapAction === 'remove-seats'),
+        rowGrouping: Number(rowGrouping) || 0,
+        colGrouping: Number(colGrouping) || 0,
+        arrangementMode: arrangementMode || "loose",
+        patternMode: patternMode || "scrambled"
+      }, (info) => { activeProgressStore[progressKey] = info; });
+    } finally {
+      delete activeProgressStore[progressKey];
+    }
+    const { allotments: generatedAllotments, notPlaced, retriesCount, attemptsUsed } = generateResult;
 
     const docs = generatedAllotments.map(a => {
       const matchingCombo = deptSemCombinations.find(combo => combo.dept === a.student.dept && String(combo.sem) === String(a.student.sem));
@@ -207,7 +394,13 @@ export const regenerate = async (req, res) => {
     const allDocs = [...docs, ...notPlacedDocs];
     if (allDocs.length) await Allotment.insertMany(allDocs);
 
-    return res.json({ ok: true, count: docs.length, notPlaced: notPlaced.map(s => s.roll) });
+    return res.json({ 
+      ok: true, 
+      count: docs.length, 
+      notPlaced: notPlaced.map(s => s.roll),
+      retriesCount: retriesCount || 0,
+      attemptsUsed: attemptsUsed || 1
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -243,6 +436,12 @@ export const saveManual = async (req, res) => {
       });
       await Allotment.insertMany(docs);
     }
+
+    // Trigger AI learning from manual adjustments
+    learnFromManualAdjustments({ orgCode: req.user.adminCode, allotments: placedAllotments }).catch(err => {
+      console.warn("[AI Learning] Failed to record manual adjustment feedback:", err.message);
+    });
+
     res.json({ ok: true });
   } catch (error) {
     res.status(500).json({ error: error.message });

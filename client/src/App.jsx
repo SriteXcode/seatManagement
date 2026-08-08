@@ -6,6 +6,7 @@ import {
   getSeatLabel, 
   decodeToken, 
   getDeptColor, 
+  getStudentClassSecLabel,
   prettySeatLabel,
   authHeader
 } from "./utils/helpers";
@@ -103,10 +104,32 @@ export default function App() {
   const [patternMode, setPatternMode] = useState("scrambled");
   const [showGenerateModal, setShowGenerateModal] = useState(false);
 
-  // Visual filters & previews
   const [filters, setFilters] = useState(null);
   const [movieRoomPreview, setMovieRoomPreview] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(null);
+  const [isGenerationBackground, setIsGenerationBackground] = useState(false);
+  const generationAbortControllerRef = useRef(null);
+
+  const handleCancelGeneration = () => {
+    if (generationAbortControllerRef.current) {
+      generationAbortControllerRef.current.abort();
+      generationAbortControllerRef.current = null;
+    }
+    setLoading(false);
+    setIsGenerationBackground(false);
+    setGenerationProgress(null);
+    showToast("Generation process cancelled.", "info");
+  };
+
+  const handleHideGenerationToBackground = () => {
+    setIsGenerationBackground(true);
+    showToast("Generation running in background...", "info");
+  };
+
+  const handleExpandGenerationFromBackground = () => {
+    setIsGenerationBackground(false);
+  };
 
   // Student directory states
   const [showStudentModal, setShowStudentModal] = useState(false);
@@ -201,6 +224,17 @@ export default function App() {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, 4000);
   };
+
+  // Toast notification when token ends / unauthorized access occurs
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      showToast("Session expired or token ended. Please log in again.", "error");
+    };
+    window.addEventListener("unauthorized-access", handleUnauthorized);
+    return () => {
+      window.removeEventListener("unauthorized-access", handleUnauthorized);
+    };
+  }, []);
 
   const closeDialog = () => {
     setDialog(prev => ({ ...prev, isOpen: false }));
@@ -737,7 +771,9 @@ export default function App() {
         gapAction
       }, token);
 
-      if (!data.ok) {
+      if (data.ok) {
+        // saved successfully
+      } else {
         showToast(data.error || "Failed to save manual rearrangement", "error");
       }
     } catch (e) {
@@ -1625,8 +1661,11 @@ export default function App() {
   }, [examConfigs, selectedExamType]);
 
   const getFieldLabel = (type) => {
-    const field = activeConfig.fields.find(f => f.type === type);
-    return field ? field.label : type;
+    const field = activeConfig?.fields?.find(f => f.type === type);
+    if (field && field.label) return field.label;
+    if (type === 'constraint_1') return selectedExamType === "School" ? "Class" : "Dept";
+    if (type === 'constraint_2') return selectedExamType === "School" ? "Section" : "Sem";
+    return type;
   };
 
   const getHeaderLabel = (headerKey) => {
@@ -2241,13 +2280,13 @@ export default function App() {
     setShowGenerateModal(true);
   };
 
-  const handleConfirmGenerateModal = ({ arrangementMode: chosenArrangement, patternMode: chosenPattern }) => {
+  const handleConfirmGenerateModal = ({ arrangementMode: chosenArrangement, patternMode: chosenPattern, selectedRoomIds, regenMode }) => {
     setArrangementMode(chosenArrangement);
     setPatternMode(chosenPattern);
     if (generateModalMode === "regenerate") {
-      executeRegeneration(chosenArrangement, chosenPattern);
+      executeRegeneration(chosenArrangement, chosenPattern, selectedRoomIds, regenMode);
     } else {
-      executeGeneration(chosenArrangement, chosenPattern);
+      executeGeneration(chosenArrangement, chosenPattern, selectedRoomIds);
     }
   };
 
@@ -2255,11 +2294,45 @@ export default function App() {
     handleOpenGenerateModal();
   }
 
-  const executeGeneration = async (chosenArrangement = arrangementMode, chosenPattern = patternMode) => {
+  const executeGeneration = async (chosenArrangement = arrangementMode, chosenPattern = patternMode, selectedRoomIds = []) => {
     const hasPrevious = allotments.length > 0;
 
     const action = async (includeBucket = true) => {
       setLoading(true);
+      setGenerationProgress({
+        roomX: 0,
+        roomTotal: selectedRoomIds.length || rooms.length || 1,
+        roomName: "Starting...",
+        attemptX: 1,
+        attemptTotal: 10,
+        estimatedTimeSec: Math.max(1, Math.ceil((selectedRoomIds.length || rooms.length || 1) * 0.3))
+      });
+
+      const pollInterval = setInterval(async () => {
+        try {
+          const pRes = await api.getAllotmentProgress(shift, date, token);
+          if (pRes && pRes.ok && pRes.progress) {
+            setGenerationProgress(pRes.progress);
+          }
+        } catch (e) {
+          // ignore
+        }
+      }, 250);
+
+      const secondInterval = setInterval(() => {
+        setGenerationProgress(prev => {
+          if (!prev) return prev;
+          const est = prev.estimatedTimeSec !== undefined ? prev.estimatedTimeSec : 1;
+          if (est > 1) {
+            return { ...prev, estimatedTimeSec: est - 1 };
+          }
+          return prev;
+        });
+      }, 1000);
+
+      const abortController = new AbortController();
+      generationAbortControllerRef.current = abortController;
+
       try {
         const res = await api.saveSchedule({
           date,
@@ -2274,12 +2347,20 @@ export default function App() {
           gapAction,
           arrangementMode: chosenArrangement,
           patternMode: chosenPattern,
+          selectedRoomIds,
           excludeStudentIds: includeBucket ? [] : bucket.map(s => s._id),
           examType: selectedExamType
-        }, token);
+        }, token, { signal: abortController.signal });
 
         if (res.ok) {
-          showToast("Allotment generated successfully!", "success");
+          const retryNote = res.retriesCount > 0 ? ` (${res.retriesCount} retry attempt${res.retriesCount > 1 ? 's' : ''} run)` : '';
+          
+          if (isGenerationBackground) {
+            showToast(`🎉 Allotment ready to preview!${retryNote}`, "success");
+            setActiveTab("Allotment");
+          } else {
+            showToast(`Allotment generated successfully!${retryNote}`, "success");
+          }
           setDeptSemCombinations([]);
           
           const data = await api.getAllotments(shift, date, token);
@@ -2302,8 +2383,17 @@ export default function App() {
           showToast(res.error || "Generation error", "error");
         }
       } catch (e) {
-        showToast("Generation failed: " + e.message, "error");
+        if (e.name === 'AbortError' || e.message.includes('aborted')) {
+          console.log("Generation aborted by user.");
+          return;
+        }
+        showToast(e.message || "Failed to generate schedule", "error");
       } finally {
+        clearInterval(pollInterval);
+        clearInterval(secondInterval);
+        generationAbortControllerRef.current = null;
+        setGenerationProgress(null);
+        setIsGenerationBackground(false);
         setLoading(false);
       }
     };
@@ -2312,26 +2402,51 @@ export default function App() {
       triggerConfirm(
         "Overwrite Allotment?",
         "An allotment already exists for this slot. Overwrite it?",
-        () => {
-          if (bucket.length > 0) {
-            triggerGenerationConfirm(
-              "Staging Bucket Students Available",
-              `You have ${bucket.length} students in the staging bucket. Generate layout including these unallotted students?`,
-              (includeBucket) => action(includeBucket)
-            );
-          } else {
-            action(true);
-          }
-        }
+        () => action(true)
       );
     } else {
-      // Starting fresh: no need to ask about staging bucket since there is no previous layout
       action(true);
     }
   };
 
-  const executeRegeneration = async (chosenArrangement = arrangementMode, chosenPattern = patternMode) => {
+
+
+  const executeRegeneration = async (chosenArrangement = arrangementMode, chosenPattern = patternMode, selectedRoomIds = [], regenMode = "scratch") => {
     setLoading(true);
+    setGenerationProgress({
+      roomX: 0,
+      roomTotal: selectedRoomIds.length || rooms.length || 1,
+      roomName: "Starting...",
+      attemptX: 1,
+      attemptTotal: 10,
+      estimatedTimeSec: Math.max(1, Math.ceil((selectedRoomIds.length || rooms.length || 1) * 0.3))
+    });
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const pRes = await api.getAllotmentProgress(shift, date, token);
+        if (pRes && pRes.ok && pRes.progress) {
+          setGenerationProgress(pRes.progress);
+        }
+      } catch (e) {
+        // ignore
+      }
+    }, 250);
+
+    const secondInterval = setInterval(() => {
+      setGenerationProgress(prev => {
+        if (!prev) return prev;
+        const est = prev.estimatedTimeSec !== undefined ? prev.estimatedTimeSec : 1;
+        if (est > 1) {
+          return { ...prev, estimatedTimeSec: est - 1 };
+        }
+        return prev;
+      });
+    }, 1000);
+
+    const abortController = new AbortController();
+    generationAbortControllerRef.current = abortController;
+
     try {
       const res = await api.regenerateSchedule({
         date,
@@ -2343,11 +2458,24 @@ export default function App() {
         gapType,
         gapAction,
         arrangementMode: chosenArrangement,
-        patternMode: chosenPattern
-      }, token);
+        patternMode: chosenPattern,
+        selectedRoomIds,
+        mode: regenMode,
+        bucketStudentIds: bucket.map(s => s._id)
+      }, token, { signal: abortController.signal });
 
       if (res.ok) {
-        showToast("Arrangement successfully regenerated from scratch!", "success");
+        const retryNote = res.retriesCount > 0 ? ` (${res.retriesCount} retry attempt${res.retriesCount > 1 ? 's' : ''} run)` : '';
+        const msg = regenMode === "fillBucket"
+          ? (res.message || `Successfully placed ${res.newPlacedCount || 0} bucket student(s) into empty seat spaces!`)
+          : `Arrangement successfully regenerated from scratch!${retryNote}`;
+
+        if (isGenerationBackground) {
+          showToast(`🎉 ${msg}`, "success");
+          setActiveTab("Allotment");
+        } else {
+          showToast(msg, "success");
+        }
         
         const data = await api.getAllotments(shift, date, token);
         if (Array.isArray(data)) {
@@ -2366,11 +2494,20 @@ export default function App() {
           }
         }
       } else {
-        showToast(res.error || "Regeneration failed", "error");
+        showToast(res.error || "Regeneration error", "error");
       }
     } catch (e) {
-      showToast("Regeneration failed: " + e.message, "error");
+      if (e.name === 'AbortError' || e.message.includes('aborted')) {
+        console.log("Regeneration aborted by user.");
+        return;
+      }
+      showToast(e.message || "Failed to regenerate schedule", "error");
     } finally {
+      clearInterval(pollInterval);
+      clearInterval(secondInterval);
+      generationAbortControllerRef.current = null;
+      setGenerationProgress(null);
+      setIsGenerationBackground(false);
       setLoading(false);
     }
   };
@@ -2448,7 +2585,7 @@ export default function App() {
     // Group students by variety (dept + sem)
     const grouped = {};
     customBucket.forEach(st => {
-      const key = `${st.dept} Sem ${st.sem}`;
+      const key = getStudentClassSecLabel(st);
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(st);
     });
@@ -2480,8 +2617,7 @@ export default function App() {
           <td style="padding: 10px; font-size: 11px; font-weight: 600;">${idx + 1}</td>
           <td style="padding: 10px; font-size: 11px; font-weight: bold; font-family: monospace;">${s.roll}</td>
           <td style="padding: 10px; font-size: 11px; font-weight: 500;">${s.name || '-'}</td>
-          <td style="padding: 10px; font-size: 11px; font-weight: 600;">${s.dept}</td>
-          <td style="padding: 10px; font-size: 11px; font-weight: 600;">Sem ${s.sem}</td>
+          <td style="padding: 10px; font-size: 11px; font-weight: 600;" colspan="2">${getStudentClassSecLabel(s)}</td>
           <td style="padding: 10px; font-size: 10px; color: #4b5563;">${Array.isArray(s.subject) ? s.subject.join(", ") : (s.subject || '-')}</td>
         </tr>
       `).join('');
@@ -2738,9 +2874,9 @@ export default function App() {
               <div style="font-weight: 600; color: #dc2626; font-size: 10px;">${seatCode}</div>
               <div style="font-size: 8px;">${roll ? `(${roll})` : '-'}</div>
               ${a ? `
-                <div style="font-size: 6px; line-height: 1;">
+                <div style="font-size: 7px; line-height: 1.1; font-weight: bold; margin-top: 2px;">
                   <div>${a.student.name}</div>
-                  <div>${a.student.dept} - ${a.student.sem}</div>
+                  <div style="color: #dc2626;">${getStudentClassSecLabel(a.student)}</div>
                 </div>
               ` : ''}
             `}
@@ -3291,6 +3427,8 @@ export default function App() {
             setDate={setDate}
             time={time}
             setTime={setTime}
+            subject={subject}
+            setSubject={setSubject}
             shift={shift}
             setShift={setShift}
             seed={seed}
@@ -3449,6 +3587,9 @@ export default function App() {
           onConfirm={handleConfirmGenerateModal}
           initialArrangementMode={arrangementMode}
           initialPatternMode={patternMode}
+          rooms={rooms}
+          isRegenerate={generateModalMode === "regenerate"}
+          title={generateModalMode === "regenerate" ? "Regenerate Allotment Strategy" : "Select Allotment Generation Strategy"}
         />
 
         {/* Student Form Modal */}
@@ -3508,17 +3649,122 @@ export default function App() {
       )}
 
       {/* Global Loading Overlay */}
-      {loading && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/35 backdrop-blur-xs select-none pointer-events-auto animate-fadeIn">
-          <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-2xl flex items-center gap-4 animate-scaleIn max-w-xs mx-4">
-            <div className="relative w-8 h-8 shrink-0">
-              <div className="absolute inset-0 rounded-full border-3 border-red-100 animate-pulse"></div>
-              <div className="absolute inset-0 rounded-full border-3 border-transparent border-t-red-700 animate-spin"></div>
+      {loading && !isGenerationBackground && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 backdrop-blur-xs select-none pointer-events-auto animate-fadeIn">
+          <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-2xl flex items-center gap-4 animate-scaleIn max-w-sm mx-4 flex-col text-left w-full">
+            <div className="flex items-center gap-4 w-full">
+              <div className="relative w-9 h-9 shrink-0">
+                <div className="absolute inset-0 rounded-full border-3 border-red-100 animate-pulse"></div>
+                <div className="absolute inset-0 rounded-full border-3 border-transparent border-t-red-700 animate-spin"></div>
+              </div>
+              {generationProgress ? (
+                <div className="flex flex-col gap-1 w-full min-w-[210px]">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-gray-800">Generating Seating</span>
+                    {generationProgress.attemptX > 1 ? (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold animate-pulse">
+                        Retrying {generationProgress.attemptX}/10
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-semibold">
+                        Pass 1/10
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-gray-700 font-medium flex items-center justify-between">
+                    <span>
+                      Room <strong className="text-red-700 font-bold">{generationProgress.roomX}/{generationProgress.roomTotal}</strong>
+                      <span className="text-gray-500 font-normal ml-1">({generationProgress.roomName || 'Processing'})</span>
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden my-1">
+                    <div 
+                      className="bg-red-700 h-1.5 rounded-full transition-all duration-300 ease-out"
+                      style={{ 
+                        width: `${Math.min(100, Math.max(8, (generationProgress.roomX / Math.max(1, generationProgress.roomTotal)) * 100))}%` 
+                      }}
+                    ></div>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-gray-500 font-medium">
+                    <span>Est. Time: ~{generationProgress.estimatedTimeSec}s</span>
+                    {generationProgress.attemptX > 1 && (
+                      <span className="text-amber-700 font-semibold">Retrying {generationProgress.attemptX}/10</span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div className="text-xs font-bold text-gray-805">Processing Request</div>
+                  <div className="text-[9px] font-semibold text-gray-400">Please wait a moment...</div>
+                </div>
+              )}
             </div>
-            <div>
-              <div className="text-xs font-bold text-gray-805">Processing Request</div>
-              <div className="text-[9px] font-semibold text-gray-400">Please wait a moment...</div>
+
+            {generationProgress && (
+              <div className="flex items-center justify-end gap-2 w-full pt-3 border-t border-gray-100 mt-1">
+                <button
+                  type="button"
+                  onClick={handleHideGenerationToBackground}
+                  className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                  title="Minimize overlay and run in background"
+                >
+                  <i className="las la-eye-slash text-sm"></i>
+                  Run in Background
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelGeneration}
+                  className="text-[11px] font-bold text-red-700 hover:text-red-900 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                  title="Cancel generation process"
+                >
+                  <i className="las la-times text-sm"></i>
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Floating Background Generation Progress Bar */}
+      {loading && isGenerationBackground && generationProgress && (
+        <div className="fixed bottom-6 right-6 z-[190] max-w-sm w-full bg-white/95 backdrop-blur-md border border-indigo-200 rounded-2xl shadow-2xl p-4 flex items-center gap-3 animate-slideInRight text-left select-none">
+          <div className="relative w-8 h-8 shrink-0">
+            <div className="absolute inset-0 rounded-full border-2 border-red-100 animate-pulse"></div>
+            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-red-700 animate-spin"></div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between text-xs font-bold text-gray-800">
+              <span className="truncate">Generating Allotment...</span>
+              <span className="text-[10px] text-gray-500 font-semibold shrink-0 ml-1">~{generationProgress.estimatedTimeSec}s</span>
             </div>
+            <div className="text-[11px] text-gray-600 font-medium truncate mt-0.5">
+              Room {generationProgress.roomX}/{generationProgress.roomTotal} ({generationProgress.roomName || 'Processing'})
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden my-1">
+              <div 
+                className="bg-red-700 h-1.5 rounded-full transition-all duration-300 ease-out"
+                style={{ width: `${Math.min(100, Math.max(8, (generationProgress.roomX / Math.max(1, generationProgress.roomTotal)) * 100))}%` }}
+              ></div>
+            </div>
+          </div>
+          <div className="flex flex-col gap-1 border-l border-gray-150 pl-2">
+            <button
+              type="button"
+              onClick={handleExpandGenerationFromBackground}
+              className="text-gray-500 hover:text-indigo-700 p-1 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+              title="Expand modal"
+            >
+              <i className="las la-expand-arrows-alt text-base"></i>
+            </button>
+            <button
+              type="button"
+              onClick={handleCancelGeneration}
+              className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+              title="Cancel generation"
+            >
+              <i className="las la-times text-base"></i>
+            </button>
           </div>
         </div>
       )}

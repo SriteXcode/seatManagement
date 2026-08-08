@@ -7,16 +7,32 @@ export default function GenerateOptionsModal({
   initialArrangementMode = "loose",
   initialPatternMode = "scrambled",
   title,
-  submitText
+  submitText,
+  rooms = [],
+  isRegenerate = false
 }) {
   const [arrangementMode, setArrangementMode] = useState(initialArrangementMode);
   const [patternMode, setPatternMode] = useState(initialPatternMode);
+  const [regenMode, setRegenMode] = useState("scratch");
+  const [selectedRoomIds, setSelectedRoomIds] = useState([]); // Empty = All rooms
 
   if (!show) return null;
 
+  const handleToggleRoom = (roomId) => {
+    setSelectedRoomIds(prev => 
+      prev.includes(roomId) 
+        ? prev.filter(id => id !== roomId) 
+        : [...prev, roomId]
+    );
+  };
+
+  const handleSelectAllRooms = () => {
+    setSelectedRoomIds([]);
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    onConfirm({ arrangementMode, patternMode });
+    onConfirm({ arrangementMode, patternMode, selectedRoomIds, regenMode });
     setShow(false);
   };
 
@@ -31,19 +47,92 @@ export default function GenerateOptionsModal({
               {title || "Select Allotment Generation Strategy"}
             </h3>
             <p className="text-xs text-gray-500 mt-0.5 font-medium">
-              Choose seating arrangement density and distribution pattern before proceeding.
+              Choose seating arrangement density, distribution pattern, and target rooms before proceeding.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => setShow(false)}
-            className="text-gray-400 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-full p-1.5 transition-all focus:outline-none cursor-pointer flex items-center justify-center"
-          >
-            <i className="las la-times text-lg"></i>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShow(false)}
+              className="text-gray-400 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-full p-1.5 transition-all focus:outline-none cursor-pointer flex items-center justify-center"
+            >
+              <i className="las la-times text-lg"></i>
+            </button>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5 overflow-y-auto flex-1 pr-1">
+          {/* Section 0: Regeneration Execution Strategy (Only shown when regenerating) */}
+          {isRegenerate && (
+            <div>
+              <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-2">
+                1. Regeneration Mode (Scratch vs Fill Blank Spaces)
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Scratch Option */}
+                <div
+                  onClick={() => setRegenMode("scratch")}
+                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                    regenMode === "scratch"
+                      ? "border-red-600 bg-red-50/50 shadow-sm"
+                      : "border-gray-200 bg-white hover:border-gray-300"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="font-bold text-xs text-gray-800 flex items-center gap-1.5">
+                      <i className="las la-trash-alt text-base text-red-700"></i>
+                      Regenerate From Scratch
+                    </span>
+                    <input
+                      type="radio"
+                      name="regenMode"
+                      value="scratch"
+                      checked={regenMode === "scratch"}
+                      onChange={() => setRegenMode("scratch")}
+                      className="text-red-700 focus:ring-red-500 cursor-pointer"
+                    />
+                  </div>
+                  <p className="text-[11px] text-gray-600 font-medium leading-relaxed">
+                    <strong>Removes all previous seat allotments.</strong> Re-analyzes all students and generates a completely fresh room arrangement from scratch.
+                  </p>
+                  <span className="inline-block mt-2 text-[9px] font-extrabold uppercase px-2 py-0.5 rounded bg-red-100 text-red-800">
+                    Full Overwrite
+                  </span>
+                </div>
+
+                {/* Fill Blank Spaces from Bucket Option */}
+                <div
+                  onClick={() => setRegenMode("fillBucket")}
+                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                    regenMode === "fillBucket"
+                      ? "border-indigo-600 bg-indigo-50/50 shadow-sm"
+                      : "border-gray-200 bg-white hover:border-gray-300"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="font-bold text-xs text-gray-800 flex items-center gap-1.5">
+                      <i className="las la-magic text-base text-indigo-700"></i>
+                      Fill Blank Spaces from Bucket
+                    </span>
+                    <input
+                      type="radio"
+                      name="regenMode"
+                      value="fillBucket"
+                      checked={regenMode === "fillBucket"}
+                      onChange={() => setRegenMode("fillBucket")}
+                      className="text-indigo-700 focus:ring-indigo-500 cursor-pointer"
+                    />
+                  </div>
+                  <p className="text-[11px] text-gray-600 font-medium leading-relaxed">
+                    <strong>Keeps current seat allotments intact.</strong> Uses smart backtracking to evaluate empty/blank spaces and fit unplaced bucket students into room seats.
+                  </p>
+                  <span className="inline-block mt-2 text-[9px] font-extrabold uppercase px-2 py-0.5 rounded bg-indigo-100 text-indigo-800">
+                    Incremental Backtracking
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
           {/* Section 1: Arrangement Density */}
           <div>
             <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-2">
@@ -144,10 +233,10 @@ export default function GenerateOptionsModal({
                   />
                 </div>
                 <p className="text-[11px] text-gray-600 font-medium leading-relaxed">
-                  Students are <strong>randomly spread</strong> across seats. Enforces a <strong>1-cell distance in all 8 directions</strong> (like a King in Chess) so no same-class student comes near.
+                  Students are <strong>scrambled across seats</strong>. Strictly prevents same-class students sitting on <strong>Left or Right</strong>. Same-class seating is <strong>permitted Diagonally and Front/Back</strong>.
                 </p>
                 <span className="inline-block mt-2 text-[9px] font-extrabold uppercase px-2 py-0.5 rounded bg-purple-100 text-purple-800">
-                  8-Direction Chess Spread
+                  Left/Right Separation (Diagonal Allowed)
                 </span>
               </div>
 
@@ -183,6 +272,71 @@ export default function GenerateOptionsModal({
               </div>
             </div>
           </div>
+
+          {/* Section 3: Target Classrooms / Rooms Multi-Select */}
+          {rooms && rooms.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block">
+                  3. Select Rooms for Allotment (Multi-Select)
+                </label>
+                <button
+                  type="button"
+                  onClick={handleSelectAllRooms}
+                  className="text-[10px] font-bold text-red-700 hover:text-red-800 cursor-pointer"
+                >
+                  {selectedRoomIds.length === 0 ? "All Rooms Selected" : "Reset to All Rooms"}
+                </button>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-36 overflow-y-auto border border-gray-200 p-2.5 rounded-xl bg-gray-50/50">
+                <div
+                  onClick={handleSelectAllRooms}
+                  className={`p-2.5 rounded-lg border cursor-pointer transition-all flex items-center justify-between text-xs font-bold ${
+                    selectedRoomIds.length === 0
+                      ? "border-red-600 bg-red-50 text-red-800"
+                      : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <i className="las la-building text-base text-red-700"></i>
+                    All Rooms ({rooms.length})
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={selectedRoomIds.length === 0}
+                    onChange={handleSelectAllRooms}
+                    className="text-red-700 focus:ring-red-500 cursor-pointer"
+                  />
+                </div>
+                {rooms.map(room => {
+                  const isChecked = selectedRoomIds.includes(room._id);
+                  const capacity = (Number(room.rows) || 0) * (Number(room.cols) || 0);
+                  return (
+                    <div
+                      key={room._id}
+                      onClick={() => handleToggleRoom(room._id)}
+                      className={`p-2.5 rounded-lg border cursor-pointer transition-all flex items-center justify-between text-xs font-bold ${
+                        isChecked
+                          ? "border-red-600 bg-red-50 text-red-800"
+                          : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-gray-900">{room.name}</div>
+                        <div className="text-[10px] text-gray-500 font-semibold">{capacity} seats ({room.rows}x{room.cols})</div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => handleToggleRoom(room._id)}
+                        className="text-red-700 focus:ring-red-500 cursor-pointer ml-1 shrink-0"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Action Footer */}
           <div className="flex items-center justify-end gap-3 border-t border-gray-150 pt-4 mt-2 shrink-0">

@@ -1,5 +1,6 @@
 import React from "react";
 import CustomSelect from "../common/CustomSelect";
+import { getStudentClassSecLabel } from "../../utils/helpers";
 
 export default function StagingBucket({
   isLoggedIn,
@@ -324,8 +325,8 @@ export default function StagingBucket({
                           <div className="text-[11px] sm:text-xs text-gray-500 font-semibold mt-0.5 select-none">{student.name}</div>
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5 select-none w-full">
-                          <div className="text-[10px] font-bold text-red-700 bg-red-50/50 border border-red-100 rounded-md px-2 py-0.5 uppercase tracking-wider select-none max-w-full whitespace-normal break-all shrink-0">
-                            {student.dept} | {getFieldLabel('constraint_2')}: {student.sem}
+                          <div className="text-[10px] font-extrabold text-red-700 bg-red-50/50 border border-red-100 rounded-md px-2 py-0.5 uppercase tracking-wider select-none max-w-full whitespace-normal break-all shrink-0">
+                            {getStudentClassSecLabel(student)}
                           </div>
                           {student.schedules && student.schedules.length > 0 ? (
                             <div className="w-full space-y-1.5 mt-1 select-none">

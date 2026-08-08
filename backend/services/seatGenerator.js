@@ -101,7 +101,66 @@ function shareClassOrSubject(st, nb) {
  *
  * Returns { allotments: [{student, room, row, col, seatCode}], notPlaced: [student...] }
  */
-export function generateAllotments({ 
+export function generateAllotments(params, onProgress) {
+  let attemptsUsed = 1;
+  const totalRoomsCount = (params.rooms || []).length;
+  const startTime = Date.now();
+
+  const reportProgress = (roomIdx, roomName, attempt) => {
+    if (typeof onProgress === "function") {
+      const elapsedSec = (Date.now() - startTime) / 1000;
+      const doneRooms = (attempt - 1) * totalRoomsCount + roomIdx;
+      const estTotalRooms = (attempt > 1 ? Math.min(5, attempt + 2) : 1) * totalRoomsCount;
+      const avgTimePerRoom = doneRooms > 0 ? elapsedSec / doneRooms : 0.15;
+      const remainingRooms = Math.max(0, estTotalRooms - doneRooms);
+      const estSeconds = Math.max(1, Math.ceil(remainingRooms * avgTimePerRoom));
+
+      onProgress({
+        roomX: roomIdx,
+        roomTotal: totalRoomsCount,
+        roomName: roomName || `Room ${roomIdx}`,
+        attemptX: attempt,
+        attemptTotal: 10,
+        estimatedTimeSec: estSeconds
+      });
+    }
+  };
+
+  let bestResult = executeSinglePass(params, (rIdx, rName) => reportProgress(rIdx, rName, 1));
+
+  // If initial pass resulted in unplaced students going to bucket, attempt multi-pass re-allotment retries!
+  if (bestResult.notPlaced.length > 0) {
+    console.log(`[Multi-Pass Retry] Initial pass resulted in ${bestResult.notPlaced.length} bucket student(s). Starting multi-attempt re-allotment...`);
+
+    const maxAttempts = 10;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      attemptsUsed = attempt + 1;
+      const retrySeed = (Number(params.seed) || 1) + attempt * 1009;
+      const attemptResult = executeSinglePass(
+        { ...params, seed: retrySeed },
+        (rIdx, rName) => reportProgress(rIdx, rName, attempt + 1)
+      );
+
+      if (attemptResult.notPlaced.length < bestResult.notPlaced.length) {
+        console.log(`[Multi-Pass Retry] Attempt ${attempt} improved layout! Bucket students reduced from ${bestResult.notPlaced.length} -> ${attemptResult.notPlaced.length}`);
+        bestResult = attemptResult;
+      }
+
+      if (bestResult.notPlaced.length === 0) {
+        console.log(`[Multi-Pass Retry] Attempt ${attempt} achieved PERFECT zero-bucket allotment!`);
+        break;
+      }
+    }
+  }
+
+  return {
+    ...bestResult,
+    attemptsUsed,
+    retriesCount: attemptsUsed > 1 ? attemptsUsed - 1 : 0
+  };
+}
+
+function executeSinglePass({ 
   students = [], 
   rooms = [], 
   shift = 1, 
@@ -112,8 +171,8 @@ export function generateAllotments({
   colGrouping = 0,
   arrangementMode = "loose",
   patternMode = "scrambled"
-}) {
-  console.log(`[Algo Exec] students count: ${students ? students.length : 0}, arrangementMode: ${arrangementMode}, patternMode: ${patternMode}`);
+}, onRoomProgress) {
+  console.log(`[Algo Exec Single Pass] students count: ${students ? students.length : 0}, arrangementMode: ${arrangementMode}, patternMode: ${patternMode}`);
   
   // Step 1: Pre-assign temporary group code to all students (e.g. ENG03 for Class 3 English)
   const target = (students || []).map(s => ({
@@ -140,7 +199,11 @@ export function generateAllotments({
       classGroups[k] = shuffleArray(classGroups[k], seed);
     }
 
-    for (const room of rooms) {
+    for (let rIdx = 0; rIdx < rooms.length; rIdx++) {
+      const room = rooms[rIdx];
+      if (typeof onRoomProgress === "function") {
+        onRoomProgress(rIdx + 1, room.name);
+      }
       const rows = Number(room.rows);
       const cols = Number(room.cols);
       const occupancy = {};
@@ -169,15 +232,6 @@ export function generateAllotments({
         let preferredKeys = availableKeys.filter(k => k !== lastColGroupKey);
         let selectedKey = preferredKeys.length > 0 ? preferredKeys[0] : availableKeys[0];
 
-        if (isStrict && selectedKey === lastColGroupKey && availableKeys.length > 1) {
-          selectedKey = availableKeys.find(k => k !== lastColGroupKey) || null;
-        }
-
-        if (!selectedKey && isStrict) {
-          // Strict mode: if no distinct class group available for adjacent column, skip column to leave space
-          continue;
-        }
-
         if (selectedKey) {
           lastColGroupKey = selectedKey;
         }
@@ -196,8 +250,8 @@ export function generateAllotments({
             candidate = classGroups[selectedKey].find(s => !used.has(String(s._id)));
           }
 
-          // Loose mode fallback if current group runs out
-          if (!candidate && !isStrict) {
+          // Fallback if current column group runs out of students
+          if (!candidate) {
             const anyGroupKey = Object.keys(classGroups).find(k => 
               classGroups[k].some(s => !used.has(String(s._id)))
             );
@@ -245,10 +299,25 @@ export function generateAllotments({
     }
 
   } else {
-    // SCRAMBLED PATTERN
-    const shuffled = shuffleArray(target, seed);
+    // SCRAMBLED PATTERN - REVISED FROM SCRATCH WITH MAX-FREQUENCY CLASS INTERLEAVING
+    // Group target students by their class/subject group code
+    const groupBuckets = {};
+    for (const st of target) {
+      const gCode = st.groupCode || "DEFAULT";
+      if (!groupBuckets[gCode]) groupBuckets[gCode] = [];
+      groupBuckets[gCode].push(st);
+    }
 
-    for (const room of rooms) {
+    // Shuffle inside each class group for randomness
+    for (const key of Object.keys(groupBuckets)) {
+      groupBuckets[key] = shuffleArray(groupBuckets[key], seed);
+    }
+
+    for (let rIdx = 0; rIdx < rooms.length; rIdx++) {
+      const room = rooms[rIdx];
+      if (typeof onRoomProgress === "function") {
+        onRoomProgress(rIdx + 1, room.name);
+      }
       const rows = Number(room.rows);
       const cols = Number(room.cols);
       const occupancy = {};
@@ -269,63 +338,316 @@ export function generateAllotments({
           }
           if (occupancy[`${r},${c}`]) continue;
 
-          let placed = false;
+          // Check Left & Right horizontal neighbors ONLY for same class conflict
+          const checkOffsets = [[0, -1], [0, 1]];
+          const horizNeighbors = [];
+          for (const [dr, dc] of checkOffsets) {
+            const key = `${r + dr},${c + dc}`;
+            if (occupancy[key]) horizNeighbors.push(occupancy[key]);
+          }
 
-          // In Strict Mode:
-          // - Ahead (-1, 0) and Behind (+1, 0) allow ANY student
-          // - Left (0, -1) and Right (0, +1) MUST BE NON-IDENTICAL (different class/dept/sem/subject)
-          // In Loose Mode:
-          // - Try non-identical Left & Right first (level 0), then 4-way (level 1), then fallback (level 2)
-          const maxRelax = isStrict ? 0 : 2;
+          // Find valid class group keys that do not conflict with Left or Right neighbor
+          const validKeys = Object.keys(groupBuckets).filter(gKey => {
+            const remaining = groupBuckets[gKey].filter(s => !used.has(String(s._id)));
+            if (remaining.length === 0) return false;
 
-          for (let relax = 0; relax <= maxRelax && !placed; relax++) {
-            // Horizontal offsets (Left & Right) where non-identical check is strictly required
-            const checkOffsets = (relax === 0 || isStrict) 
-              ? horizontalOffsets 
-              : (relax === 1 ? orthogonalOffsets : []);
+            const candidate = remaining[0];
+            for (const nb of horizNeighbors) {
+              if (shareClassOrSubject(candidate, nb)) return false;
+            }
+            return true;
+          });
 
-            for (let i = 0; i < shuffled.length; i++) {
-              const st = shuffled[i];
-              if (!st || used.has(String(st._id))) continue;
+          let candidateToPlace = null;
 
-              let hasConflict = false;
+          if (validKeys.length > 0) {
+            // Sort valid keys by remaining unplaced student count (descending)
+            // Pick from the class group with the LARGEST remaining count to prevent bottlenecks!
+            validKeys.sort((a, b) => {
+              const countA = groupBuckets[a].filter(s => !used.has(String(s._id))).length;
+              const countB = groupBuckets[b].filter(s => !used.has(String(s._id))).length;
+              return countB - countA;
+            });
 
-              if (checkOffsets.length > 0) {
-                for (const [dr, dc] of checkOffsets) {
-                  const key = `${r + dr},${c + dc}`;
-                  const nb = occupancy[key];
-                  if (nb && shareClassOrSubject(st, nb)) {
-                    hasConflict = true; // Same class/subject student on Left or Right!
-                    break;
-                  }
-                }
-              }
-
-              if (!hasConflict) {
-                occupancy[`${r},${c}`] = st;
-                used.add(String(st._id));
-                const code = seatCodeFrom(r, c);
-                result.push({
-                  student: st,
-                  room,
-                  row: r,
-                  col: c,
-                  seatCode: code,
-                  shift
-                });
-                placed = true;
-                break;
-              }
+            const bestKey = validKeys[0];
+            candidateToPlace = groupBuckets[bestKey].find(s => !used.has(String(s._id)));
+          } else if (!isStrict) {
+            // In Loose Mode, fallback: pick from largest remaining class group overall
+            const allAvailableKeys = Object.keys(groupBuckets).filter(gKey => 
+              groupBuckets[gKey].some(s => !used.has(String(s._id)))
+            );
+            if (allAvailableKeys.length > 0) {
+              allAvailableKeys.sort((a, b) => {
+                const countA = groupBuckets[a].filter(s => !used.has(String(s._id))).length;
+                const countB = groupBuckets[b].filter(s => !used.has(String(s._id))).length;
+                return countB - countA;
+              });
+              const fallbackKey = allAvailableKeys[0];
+              candidateToPlace = groupBuckets[fallbackKey].find(s => !used.has(String(s._id)));
             }
           }
-          // In strict mode (isStrict = true), if Left or Right contains identical student and no non-identical student is available, seat (r,c) is left empty!
+
+          if (candidateToPlace) {
+            occupancy[`${r},${c}`] = candidateToPlace;
+            used.add(String(candidateToPlace._id));
+            const code = seatCodeFrom(r, c);
+            result.push({
+              student: candidateToPlace,
+              room,
+              row: r,
+              col: c,
+              seatCode: code,
+              shift
+            });
+          }
         }
       }
     }
   }
 
-  const notPlaced = target.filter(s => !used.has(String(s._id)));
+  let notPlaced = target.filter(s => !used.has(String(s._id)));
+
+  // If any unplaced students remain and there are empty seats, run Recursive Backtracking!
+  if (notPlaced.length > 0 && rooms.length > 0) {
+    backtrackPlacement({
+      unplacedStudents: notPlaced,
+      rooms,
+      usedSet: used,
+      resultList: result,
+      shift,
+      useDistancing,
+      rowGrouping,
+      colGrouping,
+      isStrict
+    });
+
+    // Re-evaluate unplaced students after recursive backtracking
+    notPlaced = target.filter(s => !used.has(String(s._id)));
+  }
+
   return { allotments: result, notPlaced };
+}
+
+/**
+ * Recursive Backtracking Engine
+ * If unplaced students exist and empty seats are available, uses Depth-First Search with backtracking
+ * to find valid placements and 1-step seat swaps.
+ */
+function backtrackPlacement({
+  unplacedStudents,
+  rooms,
+  usedSet,
+  resultList,
+  shift,
+  useDistancing,
+  rowGrouping,
+  colGrouping,
+  isStrict = false
+}) {
+  console.log(`[Backtracking Engine] Running recursive backtracking for ${unplacedStudents.length} unplaced student(s)...`);
+
+  // Build room occupancy maps from resultList
+  const roomOccupancy = {};
+  for (const item of resultList) {
+    const rId = String(item.room._id || item.room);
+    if (!roomOccupancy[rId]) roomOccupancy[rId] = {};
+    roomOccupancy[rId][`${item.row},${item.col}`] = item.student;
+  }
+
+  // Gather all empty valid seats across rooms
+  const emptySeats = [];
+  for (const room of rooms) {
+    const rows = Number(room.rows);
+    const cols = Number(room.cols);
+    const rId = String(room._id);
+    if (!roomOccupancy[rId]) roomOccupancy[rId] = {};
+    const occ = roomOccupancy[rId];
+
+    for (let r = 1; r <= rows; r++) {
+      if (useDistancing && rowGrouping > 0) {
+        if (((r - 1) % (rowGrouping + 1)) === rowGrouping) continue;
+      }
+      for (let c = 1; c <= cols; c++) {
+        if (useDistancing && colGrouping > 0) {
+          if (((c - 1) % (colGrouping + 1)) === colGrouping) continue;
+        }
+
+        if (!occ[`${r},${c}`]) {
+          emptySeats.push({
+            room,
+            row: r,
+            col: c,
+            seatKey: `${r},${c}`
+          });
+        }
+      }
+    }
+  }
+
+  if (emptySeats.length === 0) {
+    console.log(`[Backtracking Engine] No empty seats available for backtracking.`);
+    return;
+  }
+
+  const remaining = [...unplacedStudents];
+  const newlyPlaced = [];
+
+  function isValidPlacement(st, room, r, c) {
+    const rId = String(room._id || room);
+    const occ = roomOccupancy[rId] || {};
+
+    // Check Left (0, -1) and Right (0, 1) neighbors for same class conflict
+    for (const [dr, dc] of [[0, -1], [0, 1]]) {
+      const nbKey = `${r + dr},${c + dc}`;
+      const nb = occ[nbKey];
+      if (nb && shareClassOrSubject(st, nb)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  let statesExplored = 0;
+  const maxStates = 15000;
+
+  function solve(index) {
+    if (index >= remaining.length) return true; // All remaining unplaced students successfully placed!
+    if (statesExplored++ > maxStates) return false;
+
+    const st = remaining[index];
+
+    // Level 1: Direct empty seat placement
+    for (let sIdx = 0; sIdx < emptySeats.length; sIdx++) {
+      const seat = emptySeats[sIdx];
+      if (seat.occupiedBy) continue;
+
+      if (isValidPlacement(st, seat.room, seat.row, seat.col)) {
+        // CHOICE
+        seat.occupiedBy = st;
+        const rId = String(seat.room._id || seat.room);
+        const occ = roomOccupancy[rId];
+        occ[seat.seatKey] = st;
+        newlyPlaced.push({
+          student: st,
+          room: seat.room,
+          row: seat.row,
+          col: seat.col,
+          seatCode: seatCodeFrom(seat.row, seat.col),
+          shift
+        });
+
+        // RECURSE
+        if (solve(index + 1)) return true;
+
+        // BACKTRACK
+        newlyPlaced.pop();
+        delete occ[seat.seatKey];
+        seat.occupiedBy = null;
+      }
+    }
+
+    // Level 2: 1-step seat swap with an existing occupant to free up a valid position
+    for (let sIdx = 0; sIdx < emptySeats.length; sIdx++) {
+      const seat = emptySeats[sIdx];
+      if (seat.occupiedBy) continue;
+
+      const rId = String(seat.room._id || seat.room);
+      const occ = roomOccupancy[rId] || {};
+      const keys = Object.keys(occ);
+
+      for (const key of keys) {
+        const existingSt = occ[key];
+        if (!existingSt) continue;
+        const [exR, exC] = key.split(',').map(Number);
+
+        delete occ[key];
+        if (isValidPlacement(st, seat.room, exR, exC)) {
+          if (isValidPlacement(existingSt, seat.room, seat.row, seat.col)) {
+            // CHOICE: Swap
+            occ[key] = st;
+            occ[seat.seatKey] = existingSt;
+            seat.occupiedBy = existingSt;
+            newlyPlaced.push({
+              student: st,
+              room: seat.room,
+              row: exR,
+              col: exC,
+              seatCode: seatCodeFrom(exR, exC),
+              shift
+            });
+
+            if (solve(index + 1)) return true;
+
+            // BACKTRACK
+            newlyPlaced.pop();
+            delete occ[seat.seatKey];
+            occ[key] = existingSt;
+            seat.occupiedBy = null;
+          }
+        }
+        occ[key] = existingSt;
+      }
+    }
+
+    return false;
+  }
+
+  solve(0);
+
+  // Loose Mode Fallback: If in Loose mode and some unplaced students still remain while empty seats exist,
+  // place them into empty seats so that 0 students go to the bucket!
+  if (!isStrict) {
+    const unplacedAfterSolve = remaining.filter(st => !newlyPlaced.some(p => String(p.student._id) === String(st._id)));
+
+    for (const st of unplacedAfterSolve) {
+      const openSeat = emptySeats.find(seat => !seat.occupiedBy);
+      if (!openSeat) break; // All available room capacity is filled!
+
+      openSeat.occupiedBy = st;
+      const rId = String(openSeat.room._id || openSeat.room);
+      const occ = roomOccupancy[rId] || (roomOccupancy[rId] = {});
+      occ[openSeat.seatKey] = st;
+
+      newlyPlaced.push({
+        student: st,
+        room: openSeat.room,
+        row: openSeat.row,
+        col: openSeat.col,
+        seatCode: seatCodeFrom(openSeat.row, openSeat.col),
+        shift
+      });
+    }
+  }
+
+  // Reconstruct resultList and update usedSet directly from updated roomOccupancy
+  resultList.length = 0;
+  usedSet.clear();
+
+  let placedCount = 0;
+  for (const rId of Object.keys(roomOccupancy)) {
+    const roomObj = rooms.find(r => String(r._id) === String(rId));
+    if (!roomObj) continue;
+
+    const occ = roomOccupancy[rId];
+    for (const seatKey of Object.keys(occ)) {
+      const studentObj = occ[seatKey];
+      if (!studentObj) continue;
+
+      const [r, c] = seatKey.split(',').map(Number);
+      resultList.push({
+        student: studentObj,
+        room: roomObj,
+        row: r,
+        col: c,
+        seatCode: seatCodeFrom(r, c),
+        shift
+      });
+      usedSet.add(String(studentObj._id));
+      placedCount++;
+    }
+  }
+
+  console.log(`[Backtracking Engine] Finished! Total placed allotments across rooms: ${placedCount}`);
 }
 
 // export function generateAllotments({ students = [], rooms = [], shift = 1, seed = 1 }) {

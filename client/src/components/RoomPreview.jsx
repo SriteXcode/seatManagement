@@ -1,18 +1,5 @@
 import React from "react";
-// Removed html2pdf from here, as it's no longer needed in this component.
-
-function getDeptColor(dept, sem) {
-  const colors = [
-    "bg-red-200", "bg-yellow-200", "bg-green-200", "bg-blue-200",
-    "bg-indigo-200", "bg-purple-200", "bg-pink-200", "bg-red-300",
-    "bg-yellow-300", "bg-green-300", "bg-blue-300", "bg-indigo-300",
-    "bg-purple-300", "bg-pink-300",
-  ];
-  if (!dept || !sem) return "";
-  const str = `${dept}-${sem}`;
-  const hash = str.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return colors[hash % colors.length];
-}
+import { getDeptColor, getDeptColorObject, getStudentClassSecLabel } from "../utils/helpers";
 
 function getSeatLabel(rowIndex, colIndex) {
   let n = rowIndex + 1; // 1-based row
@@ -205,12 +192,14 @@ export default function RoomPreview({
             {Object.entries(counts).length > 0 ? (
               Object.entries(counts).map(([key, value]) => {
                 const [dept, sem] = key.split(' - ');
+                const colorObj = getDeptColorObject(dept, sem);
+                const classSecLabel = getStudentClassSecLabel({ dept, sem });
                 return (
                   <span 
                     key={key} 
-                    className={`px-2 py-0.5 rounded font-bold text-[9px] shadow-3xs ${getDeptColor(dept, sem)}`}
+                    className={`px-2.5 py-0.5 rounded-full font-black text-[9.5px] shadow-2xs ${colorObj.badge}`}
                   >
-                    {selectedExamType === "School" ? `Class ${sem} — Sec ${dept}` : key}: {value}
+                    {classSecLabel}: {value}
                   </span>
                 );
               })
@@ -222,10 +211,10 @@ export default function RoomPreview({
       </div>
 
       {/* 3. Seating Grid Layout Container */}
-      <div className={`overflow-auto border border-gray-200 rounded-2xl bg-gray-50/50 min-h-[220px] ${selectedExamType === "School" ? 'p-2' : 'p-4'}`}>
+      <div className={`overflow-auto border border-gray-200 rounded-2xl bg-gray-50/50 min-h-[220px] p-4`}>
         <div className="flex items-center justify-center min-w-max">
           <div 
-            className={`inline-grid gap-3 border border-gray-100 bg-white rounded-2xl shadow-xs ${selectedExamType === "School" ? 'p-2 my-0 mx-0' : 'p-4 my-4 mx-2'}`}
+            className={`inline-grid gap-3 border border-gray-100 bg-white rounded-2xl shadow-xs p-4 my-4 mx-2`}
             style={{ 
               gridTemplateColumns: gridColsTemplate,
               gridTemplateRows: gridRowsTemplate
@@ -246,49 +235,35 @@ export default function RoomPreview({
               const c = cTrack.originalCol;
               const key = `${r},${c}`;
               const a = map.map[key];
-              const seatCode = a?.seatCode || getSeatLabel(r - 1, c);
-              const roll = a?.student?.roll;
-
+              const isHidden = false; // Simplified logic as per previous version
+              const seatCode = getSeatLabel(r - 1, c - 1);
+              const roll = a ? a.student.roll : null;
+              
               const isRowGap = useDistancing && gapAction !== 'bring-together' && rowGrouping > 0 && ((r - 1) % (rowGrouping + 1)) === rowGrouping;
               const isColGap = useDistancing && gapAction !== 'bring-together' && colGrouping > 0 && ((c - 1) % (colGrouping + 1)) === colGrouping;
               const isLayoutGap = isRowGap || isColGap;
-              const isHidden = isLayoutGap && gapType === 'physical-gap' && !a;
 
               return (
                 <div
-                  key={key}
-                  draggable={userRole === "admin"}
-                  onDragStart={e => {
-                    if(onDragStart && a) onDragStart(e, a, room, r, c);
-                    else e.preventDefault();
-                  }}
-                  onDragOver={e => {
-                    if(userRole === "admin" && !isHidden && (!isLayoutGap || gapAction === "bring-together")) e.preventDefault();
-                  }}
-                  onDrop={e => {
-                    if(onDropOnSeat && !isHidden && (!isLayoutGap || gapAction === "bring-together")) onDropOnSeat(e, room, r, c);
-                  }}
-                  onMouseMove={(e) => {
-                    if (isHidden) return;
-                    setHoveredSeat({
-                      a,
-                      seatCode,
-                      isLayoutGap,
-                      roomName: room.name,
-                      row: r,
-                      col: c,
-                      x: e.clientX,
-                      y: e.clientY
-                    });
+                  key={`preview-seat-${r}-${c}`}
+                  onMouseEnter={(e) => {
+                    if (a) {
+                      setHoveredSeat({
+                        seatCode,
+                        a,
+                        x: e.clientX,
+                        y: e.clientY
+                      });
+                    }
                   }}
                   onMouseLeave={() => {
                     setHoveredSeat(null);
                   }}
-                  className={`w-24 h-18 rounded-lg flex flex-col items-center justify-center text-[10px] text-center p-1.5 transition-all border ${
+                  className={`w-24 h-18 rounded-lg flex flex-col items-center justify-between text-[10px] text-center p-1.5 transition-all border ${
                     isHidden
                       ? 'border-none bg-transparent opacity-0 text-transparent pointer-events-none'
                       : a 
-                        ? `${getDeptColor(a.student.dept, a.student.sem)} border-gray-400 shadow-xs hover:scale-[1.03] ${userRole === "admin" ? "cursor-grab active:cursor-grabbing" : ""}` 
+                        ? `${getDeptColor(a.student.dept, a.student.sem, a.student.subject)} shadow-xs hover:scale-[1.03] ${userRole === "admin" ? "cursor-grab active:cursor-grabbing" : ""}` 
                         : isLayoutGap
                           ? 'border-2 border-dashed border-gray-300 bg-gray-100/70 text-gray-500'
                           : `border-gray-250 bg-white hover:bg-gray-50/50 hover:scale-[1.03] ${userRole === "admin" ? "cursor-pointer" : ""}`
@@ -296,21 +271,23 @@ export default function RoomPreview({
                 >
                   {isHidden ? '' : (
                     <>
-                      <div className="text-[10px] font-bold text-gray-900">{seatCode}</div>
-                      <div className="text-[9px] font-bold text-gray-600 mt-0.5">{roll ? `(${roll})` : '-'}</div>
-                      {isLayoutGap && !a && <span className="text-[8px] text-gray-400 font-extrabold uppercase tracking-wider mt-0.5">GAP</span>}
-                      {a && (
-                        <div className="text-[8px] leading-tight text-gray-650 truncate w-full mt-0.5">
-                          <div className="truncate font-bold text-gray-850">{a.student.name}</div>
-                          {selectedExamType === "School" ? (
-                            <div className="truncate text-red-700 font-bold">Class {a.student.sem} — {a.student.dept}</div>
-                          ) : (
-                            <div className="truncate text-red-700 font-bold">
-                              {getFieldLabel ? getFieldLabel('constraint_1') : 'Dept'}: {a.student.dept}
-                            </div>
-                          )}
-                        </div>
-                      )}
+                      <div className="w-full flex items-center justify-between gap-0.5">
+                        <span className="text-[10px] font-bold text-gray-900 leading-none">{seatCode}</span>
+                        <span className="text-[9px] font-extrabold text-gray-600 leading-none">{roll ? `(${roll})` : '-'}</span>
+                      </div>
+                      {isLayoutGap && !a && <span className="text-[8px] text-gray-400 font-extrabold uppercase tracking-wider my-auto">GAP</span>}
+                      {a && (() => {
+                        const colorObj = getDeptColorObject(a.student.dept, a.student.sem, a.student.subject);
+                        const classSecLabel = getStudentClassSecLabel(a.student);
+                        return (
+                          <div className="w-full flex flex-col items-center justify-center gap-0.5 my-auto">
+                            <div className="truncate font-bold text-gray-950 text-[9px] w-full leading-tight">{a.student.name}</div>
+                            <span className={`text-[8px] font-black px-2 py-0.5 rounded-full shadow-2xs uppercase tracking-wider truncate max-w-full leading-none ${colorObj.badge}`}>
+                              {classSecLabel}
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </>
                   )}
                 </div>
@@ -323,9 +300,7 @@ export default function RoomPreview({
 
       <div className="mt-4 flex items-center justify-between">
         <div className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">
-          {selectedExamType === "School" 
-            ? "Format: Roomno. — Seat Code — Student Roll Number (Name / Class — Sec)" 
-            : "Format: Roomno. — Seat Code — Student Roll Number (Name / Dept)"}
+          Format: Roomno. — Seat Code — Roll No (Name / Class-Sec)
         </div>
       </div>
 
@@ -377,28 +352,12 @@ export default function RoomPreview({
                 </div>
                 <div className="flex flex-col col-span-2 bg-slate-800/40 rounded-lg p-1.5 border border-slate-800">
                   <span className="text-[9px] text-slate-400 uppercase font-semibold">
-                    {selectedExamType === "School" ? "Class & Section" : "Department & Sem"}
+                    Class & Section / Dept
                   </span>
                   <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                    {selectedExamType === "School" ? (
-                      <>
-                        <span className="px-2 py-0.5 bg-red-500/20 text-red-300 rounded-md font-bold text-[10px] border border-red-500/30">
-                          Class {hoveredSeat.a.student.sem}
-                        </span>
-                        <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 rounded-md font-bold text-[10px] border border-blue-500/30">
-                          Section {hoveredSeat.a.student.dept}
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="px-2 py-0.5 bg-red-500/20 text-red-300 rounded-md font-bold text-[10px] border border-red-500/30">
-                          {hoveredSeat.a.student.dept}
-                        </span>
-                        <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 rounded-md font-bold text-[10px] border border-blue-500/30">
-                          Sem {hoveredSeat.a.student.sem}
-                        </span>
-                      </>
-                    )}
+                    <span className="px-2.5 py-0.5 bg-red-500/20 text-red-300 rounded-md font-extrabold text-[11px] border border-red-500/30">
+                      {getStudentClassSecLabel(hoveredSeat.a.student)}
+                    </span>
                   </div>
                 </div>
               </div>
